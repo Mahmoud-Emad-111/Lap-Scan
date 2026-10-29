@@ -26,6 +26,11 @@ class LabResultPolicy
                 && $user->branches()->whereKey($labResult->orderItem->order->branch_id)->exists());
     }
 
+    public function downloadDocument(User $user, LabResult $labResult): bool
+    {
+        return $labResult->document_path !== null && $this->view($user, $labResult);
+    }
+
     /**
      * Determine whether the user can create models.
      */

@@ -19,12 +19,12 @@ The backend follows a lightweight modular-monolith structure: domain operations 
 
 The demo seeder is blocked in production. It creates:
 
-| Role | Email |
-| --- | --- |
-| Lab administrator | `admin@lab.test` |
-| Lab staff | `staff@lab.test` |
-| Doctor | `doctor@lab.test` |
-| Patient | `patient@lab.test` |
+| Role              | Email              |
+| ----------------- | ------------------ |
+| Lab administrator | `admin@lab.test`   |
+| Lab staff         | `staff@lab.test`   |
+| Doctor            | `doctor@lab.test`  |
+| Patient           | `patient@lab.test` |
 
 The default local password is `password`. Set `LAB_DEMO_PASSWORD` in `.env` to use a different local password. Demo catalog and order records are explicitly marked as examples and contain no clinical result values.
 
@@ -44,22 +44,17 @@ The demo seeder is intentionally unavailable in production. Provision production
 
 ## Frontend development
 
-The interface is a React + TypeScript Inertia application. Keep the existing Inertia entry point and role-aware shared layout; do not add a second client router. The current feature-oriented locations are:
+The React + TypeScript frontend is an independent Vite application under `frontend/`. It owns patient, doctor, and laboratory routes and can be installed and built without Laravel. Laravel serves the REST API only; it does not render React or provide the SPA fallback. Client-side route guards improve navigation, while Laravel API authorization remains the security boundary.
 
-| Purpose | Location |
-| --- | --- |
-| Inertia page entry points | `resources/js/pages/` |
-| Shared laboratory UI and layout components | `resources/js/components/laboratory/` |
-| Doctor feature pages, API service, and types | `resources/js/modules/doctors/` |
-| Referral discount administration, API service, and types | `resources/js/modules/referral-discounts/` |
-| Central HTTP client and response normalization | `resources/js/lib/api-client.ts` |
-| Generated typed Laravel routes/actions | `resources/js/actions/` and `resources/js/routes/` |
+Run the frontend from its directory with `npm install`, `npm run dev`, `npm run types:check`, `npm run check`, and `npm run build`. The production output is `frontend/dist`.
 
-Install JavaScript dependencies with `npm install`. Run the development server with `npm run dev`, check types with `npm run types:check`, check formatting with `npm run check`, and create a production build with `npm run build`.
+The frontend folder structure, environment variables, API integration, and feature-extension steps are documented in [frontend/README.md](frontend/README.md). Local Vite-to-Laravel requests use `VITE_API_BASE_URL=http://localhost:8000` and allow both localhost frontend origins through `FRONTEND_URL`. Authentication uses Sanctum bearer tokens through the centralized frontend API client, not cookie-based SPA authentication; cross-origin cookies and the CSRF cookie flow are not enabled.
 
-`VITE_API_BASE_URL` is optional and defaults to same-origin requests. Set it to the API origin only when the API is hosted separately. The current login uses Sanctum bearer tokens sent by the centralized API client; it does not use cookie-based SPA authentication. For a cross-origin deployment, allow the frontend origin and the `Authorization`, `Accept`, and `Content-Type` headers in the API's CORS configuration. Do not enable credentialed cross-origin cookies unless the authentication architecture is intentionally changed.
+### Production deployment
 
-To add a doctor feature page, place its page/component and domain types under `resources/js/modules/doctors/`, add typed API operations to `modules/doctors/services/doctorApi.ts`, and connect the page through the existing role-aware Inertia shell. For a new Laravel API endpoint, add the route/controller/request/resource, regenerate Wayfinder helpers with `php artisan wayfinder:generate --with-form --no-interaction`, then call the generated route through the feature API service. Keep page components free of direct network requests.
+The Docker Nginx image builds the frontend into `frontend/dist`, serves client-side routes with an `index.html` fallback, and passes `/api/*`, `/sanctum/*`, and `/up` to Laravel through PHP-FPM. API routes are handled before the SPA fallback, so an unknown API URL remains a Laravel JSON 404. Same-domain deployments use the default empty `VITE_API_BASE_URL`; set it to the API origin when building for a separate API host. The Compose Nginx service accepts that value as a build argument from the root `.env`.
+
+For local development, run Laravel separately with `php artisan serve --host=127.0.0.1 --port=8000` and the frontend with `npm run dev` from `frontend/`. See the frontend README for the full setup.
 
 ## Authentication
 
@@ -80,44 +75,47 @@ Send the returned token as `Authorization: Bearer <token>`. Login is limited to 
 
 ## Available endpoints
 
-| Method | Endpoint | Access |
-| --- | --- | --- |
-| `POST` | `/api/v1/login` | Public, rate-limited |
-| `GET` | `/api/v1/me` | Authenticated |
-| `DELETE` | `/api/v1/logout` | Authenticated |
-| `GET`, `POST` | `/api/v1/branches` | Branch reads require staff access; create requires `lab_admin` |
-| `GET`, `PUT/PATCH` | `/api/v1/branches/{branch}` | Branch reads require assigned staff access; updates require `lab_admin` |
-| `GET`, `POST` | `/api/v1/patients` | `lab_staff` or `lab_admin` |
-| `GET`, `PUT/PATCH` | `/api/v1/patients/{patient}` | `lab_staff` or `lab_admin` |
-| `GET`, `POST` | `/api/v1/tests` | Authenticated catalog reads; create requires laboratory staff |
-| `GET`, `PUT/PATCH` | `/api/v1/tests/{test}` | Active tests are visible to authenticated users; updates require laboratory staff |
-| `GET`, `POST`, `PUT/PATCH` | `/api/v1/users` | `lab_admin` only; staff assignments are branch-scoped |
-| `GET`, `POST` | `/api/v1/orders` | Laboratory staff on an assigned branch or `lab_admin` |
-| `GET` | `/api/v1/orders/{order}` | Assigned laboratory staff or `lab_admin` |
-| `GET` | `/api/v1/samples` | Laboratory staff on assigned branches or `lab_admin` |
-| `POST` | `/api/v1/samples/{sample}/collection` | Records sample receipt for authorized staff |
-| `GET` | `/api/v1/results` | Laboratory staff on assigned branches or `lab_admin` |
-| `POST` | `/api/v1/order-items/{orderItem}/result` | Saves or updates an unapproved result draft |
-| `POST` | `/api/v1/results/{result}/approval` | Approves a draft and makes it visible to the patient |
-| `GET` | `/api/v1/results/{result}/revisions` | Authorized laboratory staff can review the immutable correction history |
-| `POST` | `/api/v1/results/{result}/corrections` | Authorized branch staff or `lab_admin`; requires a reason and returns the corrected version to draft |
-| `GET`, `PUT` | `/api/v1/doctor/profile` | Authenticated doctor; profile edits return verification to pending |
-| `GET` | `/api/v1/doctors` | `lab_admin`; doctor verification queue |
-| `PATCH` | `/api/v1/doctors/{doctor}/verification` | `lab_admin`; approve, reject, or suspend a doctor |
-| `GET`, `POST` | `/api/v1/referral-discount-rules` | `lab_admin`; list and create patient referral discount rules |
-| `PUT`, `PATCH` | `/api/v1/referral-discount-rules/{rule}` | `lab_admin`; update or deactivate a discount rule |
-| `GET` | `/api/v1/doctor/branches`, `/api/v1/doctor/tests` | Verified doctor; active branch and test choices |
-| `GET` | `/api/v1/doctor/patients?phone=...` | Verified doctor; exact-phone lookup with minimal patient fields |
-| `GET`, `POST` | `/api/v1/doctor/orders` | Verified doctor; own referrals and referral creation |
-| `GET` | `/api/v1/doctor/orders/{order}` | Only the referring doctor |
-| `GET` | `/api/v1/doctor/results/{result}` | Verified referring doctor; approved results only |
-| `GET` | `/api/v1/doctor/results/{result}/pdf` | Verified referring doctor; generated, authorized PDF download |
-| `GET` | `/api/v1/dashboard` | Role-scoped dashboard counts |
-| `GET` | `/api/v1/reports/operations` | Operational counts; laboratory staff or `lab_admin` |
-| `GET` | `/api/v1/patient/orders` | Orders belonging to the authenticated patient |
-| `GET` | `/api/v1/patient/results` | Approved results belonging to the authenticated patient |
+| Method                     | Endpoint                                          | Access                                                                                               |
+| -------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `POST`                     | `/api/v1/login`                                   | Public, rate-limited                                                                                 |
+| `GET`                      | `/api/v1/me`                                      | Authenticated                                                                                        |
+| `DELETE`                   | `/api/v1/logout`                                  | Authenticated                                                                                        |
+| `GET`, `POST`              | `/api/v1/branches`                                | Branch reads require staff access; create requires `lab_admin`                                       |
+| `GET`, `PUT/PATCH`         | `/api/v1/branches/{branch}`                       | Branch reads require assigned staff access; updates require `lab_admin`                              |
+| `GET`, `POST`              | `/api/v1/patients`                                | `lab_staff` or `lab_admin`                                                                           |
+| `GET`, `PUT/PATCH`         | `/api/v1/patients/{patient}`                      | `lab_staff` or `lab_admin`                                                                           |
+| `GET`, `POST`              | `/api/v1/tests`                                   | Authenticated catalog reads; create requires laboratory staff                                        |
+| `GET`, `PUT/PATCH`         | `/api/v1/tests/{test}`                            | Active tests are visible to authenticated users; updates require laboratory staff                    |
+| `GET`, `POST`, `PUT/PATCH` | `/api/v1/users`                                   | `lab_admin` only; staff assignments are branch-scoped                                                |
+| `GET`, `POST`              | `/api/v1/orders`                                  | Laboratory staff on an assigned branch or `lab_admin`                                                |
+| `GET`                      | `/api/v1/orders/{order}`                          | Assigned laboratory staff or `lab_admin`                                                             |
+| `GET`                      | `/api/v1/samples`                                 | Laboratory staff on assigned branches or `lab_admin`                                                 |
+| `POST`                     | `/api/v1/samples/{sample}/collection`             | Records sample receipt for authorized staff                                                          |
+| `GET`                      | `/api/v1/results`                                 | Laboratory staff on assigned branches or `lab_admin`                                                 |
+| `POST`                     | `/api/v1/order-items/{orderItem}/result`          | Saves or updates an unapproved result draft; optionally accepts a private PDF attachment             |
+| `GET`                      | `/api/v1/results/{result}/document`               | `lab_admin` or staff assigned to the result's branch                                                 |
+| `POST`                     | `/api/v1/results/{result}/approval`               | Approves a draft and makes it visible to the patient                                                 |
+| `GET`                      | `/api/v1/results/{result}/revisions`              | Authorized laboratory staff can review the immutable correction history                              |
+| `POST`                     | `/api/v1/results/{result}/corrections`            | Authorized branch staff or `lab_admin`; requires a reason and returns the corrected version to draft |
+| `GET`, `PUT`               | `/api/v1/doctor/profile`                          | Authenticated doctor; profile edits return verification to pending                                   |
+| `GET`                      | `/api/v1/doctors`                                 | `lab_admin`; doctor verification queue                                                               |
+| `PATCH`                    | `/api/v1/doctors/{doctor}/verification`           | `lab_admin`; approve, reject, or suspend a doctor                                                    |
+| `GET`, `POST`              | `/api/v1/referral-discount-rules`                 | `lab_admin`; list and create patient referral discount rules                                         |
+| `PUT`, `PATCH`             | `/api/v1/referral-discount-rules/{rule}`          | `lab_admin`; update or deactivate a discount rule                                                    |
+| `GET`                      | `/api/v1/doctor/branches`, `/api/v1/doctor/tests` | Verified doctor; active branch and test choices                                                      |
+| `GET`                      | `/api/v1/doctor/patients?phone=...`               | Verified doctor; exact-phone lookup with minimal patient fields                                      |
+| `GET`, `POST`              | `/api/v1/doctor/orders`                           | Verified doctor; own referrals and referral creation                                                 |
+| `GET`                      | `/api/v1/doctor/orders/{order}`                   | Only the referring doctor                                                                            |
+| `GET`                      | `/api/v1/doctor/results/{result}`                 | Verified referring doctor; approved results only                                                     |
+| `GET`                      | `/api/v1/doctor/results/{result}/pdf`             | Verified referring doctor; generated, authorized PDF download                                        |
+| `GET`                      | `/api/v1/dashboard`                               | Role-scoped dashboard counts                                                                         |
+| `GET`                      | `/api/v1/reports/operations`                      | Operational counts; laboratory staff or `lab_admin`                                                  |
+| `GET`                      | `/api/v1/patient/orders`                          | Orders belonging to the authenticated patient                                                        |
+| `GET`                      | `/api/v1/patient/results`                         | Approved results belonging to the authenticated patient                                              |
 
 Collections are paginated. Orders retain the test name, code, specimen type, and price at the time of registration. Each selected test creates a separately trackable sample. Results remain drafts until a laboratory user approves them; the patient portal returns approved results only. Correcting a released result stores its previous values and approval metadata in an immutable revision, records the correction reason and actor, and requires approval again before the corrected version is released. Staff access is limited to assigned branches, and patient access is limited to the account's linked patient profile.
+
+Result entry continues to require a manually entered `value`. The existing JSON payload remains supported; a multipart request may additionally include a `pdf` file (PDF only, up to 10 MB) or `remove_pdf=true`. Attachments are stored on the private local disk and can be downloaded only by laboratory administrators or staff assigned to the result's branch. PDF contents are not extracted, and approved results cannot be edited through the draft endpoint.
 
 Referral discounts are configured by `lab_admin` as a percentage or fixed amount, with optional minimum order value,
 maximum discount, validity dates, doctor/branch targeting, and first-referral or all-referrals scope. “First referral”

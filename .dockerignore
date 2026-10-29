@@ -18,15 +18,14 @@ Thumbs.db
 # Installed dependencies
 /vendor
 /node_modules
-/dashboard/node_modules
+/frontend/node_modules
 **/node_modules
 **/vendor
 
 # Generated frontend assets
 /public/build
 /public/hot
-/dashboard/dist
-/dashboard/coverage
+/frontend/dist
 
 # Runtime data, caches, and logs
 /storage/logs

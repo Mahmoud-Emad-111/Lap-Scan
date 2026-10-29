@@ -4,7 +4,11 @@ import PatientPortalController from '@/actions/App/Http/Controllers/Api/V1/Patie
 import ReportController from '@/actions/App/Http/Controllers/Api/V1/ReportController';
 import SampleController from '@/actions/App/Http/Controllers/Api/V1/SampleController';
 import UserController from '@/actions/App/Http/Controllers/Api/V1/UserController';
-import { apiRequest } from '@/lib/api-client';
+import {
+    apiRequest,
+    downloadAuthorizedFile,
+    fetchAuthorizedFile,
+} from '@/lib/api-client';
 import {
     fetchBranches,
     fetchPatients,
@@ -126,11 +130,52 @@ export async function saveWorkflowResult(
     token: string,
     orderItemId: number,
     payload: WorkflowResultPayload,
+    pdf: File | null,
+    removePdf: boolean,
 ): Promise<void> {
+    let body: Record<string, unknown> | FormData = payload;
+
+    if (pdf || removePdf) {
+        const formData = new FormData();
+
+        Object.entries(payload).forEach(([key, value]) => {
+            formData.append(key, value);
+        });
+
+        if (pdf) {
+            formData.append('pdf', pdf);
+        } else {
+            formData.append('remove_pdf', '1');
+        }
+
+        body = formData;
+    }
+
     await apiRequest<unknown>(
         LabResultController.store({ orderItem: orderItemId }),
         token,
-        payload,
+        body,
+    );
+}
+
+export async function downloadWorkflowResultDocument(
+    token: string,
+    resultId: number,
+): Promise<void> {
+    await downloadAuthorizedFile(
+        LabResultController.document({ result: resultId }).url,
+        token,
+        `lab-result-${resultId}.pdf`,
+    );
+}
+
+export async function fetchWorkflowResultDocument(
+    token: string,
+    resultId: number,
+): Promise<Blob> {
+    return fetchAuthorizedFile(
+        LabResultController.document({ result: resultId }).url,
+        token,
     );
 }
 

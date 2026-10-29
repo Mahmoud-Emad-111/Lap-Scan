@@ -38,6 +38,7 @@ export function WorkflowTable({
     onCollectSample,
     onEditResult,
     onApproveResult,
+    onDownloadResultDocument,
 }: {
     section: WorkflowSection;
     rows: WorkflowRow[];
@@ -45,8 +46,9 @@ export function WorkflowTable({
     query: string;
     onEditUser: (user: WorkflowRow) => void;
     onCollectSample: (sampleId: number) => void;
-    onEditResult: (item: OrderItem) => void;
+    onEditResult: (item: OrderItem, order: WorkflowRow) => void;
     onApproveResult: (resultId: number) => void;
+    onDownloadResultDocument: (resultId: number) => void;
 }) {
     if (rows.length === 0) {
         return (
@@ -240,6 +242,11 @@ export function WorkflowTable({
                 {items.map(({ order, item }) => {
                     const draftResultId =
                         item.result?.status === 'draft' ? item.result.id : null;
+                    const resultId = item.result?.id;
+                    const pendingSampleId =
+                        item.sample?.status === 'pending_collection'
+                            ? item.sample.id
+                            : null;
 
                     return (
                         <tr key={item.id}>
@@ -252,35 +259,71 @@ export function WorkflowTable({
                             <TableCell>
                                 {item.result?.value ?? '—'}{' '}
                                 {item.result?.unit ?? ''}
+                                {item.result?.has_pdf && (
+                                    <span className="mt-1 block text-xs text-slate-500">
+                                        تقرير PDF مرفق
+                                    </span>
+                                )}
                             </TableCell>
                             <TableCell>
                                 <StatusBadge status={item.result?.status} />
                             </TableCell>
                             <TableCell>
-                                {item.sample?.status === 'collected' &&
-                                    item.result?.status !== 'approved' && (
-                                        <div className="flex gap-2">
+                                {pendingSampleId !== null ? (
+                                    <div className="grid justify-items-start gap-2">
+                                        <ActionButton
+                                            label="تسجيل استلام العينة"
+                                            onClick={() =>
+                                                onCollectSample(pendingSampleId)
+                                            }
+                                        />
+                                        <span className="text-xs text-slate-500">
+                                            يلزم تسجيل الاستلام قبل إدخال النتيجة.
+                                        </span>
+                                    </div>
+                                ) : item.sample?.status === 'collected' &&
+                                  item.result?.status !== 'approved' ? (
+                                    <div className="flex gap-2">
+                                        <ActionButton
+                                            label={
+                                                item.result
+                                                    ? 'تعديل المسودة'
+                                                    : 'إدخال نتيجة'
+                                            }
+                                            onClick={() =>
+                                                onEditResult(item, order)
+                                            }
+                                        />
+                                        {draftResultId !== null && (
                                             <ActionButton
-                                                label={
-                                                    item.result
-                                                        ? 'تعديل المسودة'
-                                                        : 'إدخال نتيجة'
-                                                }
+                                                label="اعتماد"
                                                 onClick={() =>
-                                                    onEditResult(item)
+                                                    onApproveResult(
+                                                        draftResultId,
+                                                    )
                                                 }
                                             />
-                                            {draftResultId !== null && (
-                                                <ActionButton
-                                                    label="اعتماد"
-                                                    onClick={() =>
-                                                        onApproveResult(
-                                                            draftResultId,
-                                                        )
-                                                    }
-                                                />
-                                            )}
-                                        </div>
+                                        )}
+                                    </div>
+                                ) : item.result?.status === 'approved' ? (
+                                    <span className="text-xs text-slate-500">
+                                        النتيجة معتمدة ولا يمكن تعديلها.
+                                    </span>
+                                ) : !item.sample ? (
+                                    <span className="text-xs text-slate-500">
+                                        لا توجد عينة مرتبطة بهذا التحليل.
+                                    </span>
+                                ) : null}
+                                {item.result?.has_pdf &&
+                                    resultId !== undefined && (
+                                        <ActionButton
+                                            label="تنزيل PDF"
+                                            onClick={() =>
+                                                onDownloadResultDocument(
+                                                    resultId,
+                                                )
+                                            }
+                                        />
                                     )}
                             </TableCell>
                         </tr>

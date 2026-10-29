@@ -25,10 +25,12 @@ import {
     approveWorkflowResult,
     collectWorkflowSample,
     createWorkflowOrder,
+    downloadWorkflowResultDocument,
     fetchBranchOptions,
     fetchOperationsReport,
     fetchPatientOptions,
     fetchTestOptions,
+    fetchWorkflowResultDocument,
     fetchWorkflowRows,
     getWorkflowOrdersUrl,
     saveWorkflowResult,
@@ -67,10 +69,26 @@ export function WorkflowSectionPage({
     const [query, setQuery] = useState('');
     const [priorityFilter, setPriorityFilter] = useState('');
     const [editor, setEditor] = useState<Editor | null>(null);
+    const [documentPreview, setDocumentPreview] = useState<{
+        resultId: number;
+        url: string;
+    } | null>(null);
+    const [previewingDocumentId, setPreviewingDocumentId] = useState<
+        number | null
+    >(null);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [error, setError] = useState('');
+    const [documentError, setDocumentError] = useState('');
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            if (documentPreview) {
+                URL.revokeObjectURL(documentPreview.url);
+            }
+        };
+    }, [documentPreview]);
 
     const loadPage = useCallback(
         async (url?: string) => {
@@ -192,12 +210,28 @@ export function WorkflowSectionPage({
         }
     }
 
-    function openResultEditor(item: OrderItem) {
+    function openResultEditor(item: OrderItem, order: WorkflowRow) {
         setErrors({});
+        setDocumentError('');
+        setDocumentPreview(null);
         setEditor({
             kind: 'result',
             orderItemId: item.id,
             resultId: item.result?.id,
+            context: {
+                orderNumber: order.order_number,
+                patientName: order.patient?.full_name,
+                branchName: order.branch?.name,
+                testName: item.test_name,
+                specimenType: item.specimen_type,
+                sampleBarcode: item.sample?.barcode,
+                priority: order.priority,
+            },
+            hasPdf: item.result?.has_pdf ?? false,
+            documentName: item.result?.document_name ?? null,
+            documentSize: item.result?.document_size ?? null,
+            pdf: null,
+            removePdf: false,
             values: {
                 value: item.result?.value ?? '',
                 unit: item.result?.unit ?? '',
@@ -213,6 +247,56 @@ export function WorkflowSectionPage({
                 ? { ...current, values: { ...current.values, [key]: value } }
                 : current,
         );
+    }
+
+    function updateResultPdf(pdf: File | null) {
+        setEditor((current) =>
+            current?.kind === 'result'
+                ? { ...current, pdf, removePdf: false }
+                : current,
+        );
+    }
+
+    function toggleResultPdfRemoval(removePdf: boolean) {
+        setEditor((current) =>
+            current?.kind === 'result'
+                ? { ...current, removePdf, pdf: null }
+                : current,
+        );
+    }
+
+    async function previewResultDocument(resultId: number) {
+        setPreviewingDocumentId(resultId);
+        setDocumentError('');
+        setError('');
+
+        try {
+            const pdf = await fetchWorkflowResultDocument(token, resultId);
+            const url = URL.createObjectURL(pdf);
+            setDocumentPreview({ resultId, url });
+        } catch (requestError) {
+            setDocumentError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : 'تعذّرت معاينة ملف PDF.',
+            );
+        } finally {
+            setPreviewingDocumentId(null);
+        }
+    }
+
+    async function downloadResultDocument(resultId: number) {
+        setError('');
+
+        try {
+            await downloadWorkflowResultDocument(token, resultId);
+        } catch (requestError) {
+            setError(
+                requestError instanceof Error
+                    ? requestError.message
+                    : 'تعذّر تنزيل ملف PDF.',
+            );
+        }
     }
 
     async function saveEditor(event: FormEvent<HTMLFormElement>) {
@@ -261,16 +345,28 @@ export function WorkflowSectionPage({
                     notes: getValue(values.notes),
                 });
             } else {
-                await saveWorkflowResult(token, editor.orderItemId, {
-                    value: getValue(values.value),
-                    unit: getValue(values.unit),
-                    reference_range: getValue(values.reference_range),
-                    notes: getValue(values.notes),
-                });
+                await saveWorkflowResult(
+                    token,
+                    editor.orderItemId,
+                    {
+                        value: getValue(values.value),
+                        unit: getValue(values.unit),
+                        reference_range: getValue(values.reference_range),
+                        notes: getValue(values.notes),
+                    },
+                    editor.pdf,
+                    editor.removePdf,
+                );
             }
 
             setEditor(null);
-            onNotice('تم حفظ البيانات بنجاح.');
+            setDocumentPreview(null);
+            setDocumentError('');
+            onNotice(
+                editor.kind === 'result' && (editor.pdf || editor.removePdf)
+                    ? 'تم حفظ المسودة وتحديث مرفق PDF.'
+                    : 'تم حفظ البيانات بنجاح.',
+            );
             await loadPage();
         } catch (requestError) {
             if (requestError instanceof ApiError) {
@@ -387,7 +483,7 @@ export function WorkflowSectionPage({
     }
 
     const canCreateUser = section === 'users' && role === 'lab_admin';
-    const canCreateOrder = section === 'orders';
+    const canCreateOrder = section === 'orders' || section === 'results';
     const addAction =
         canCreateUser || canCreateOrder ? (
             <PrimaryButton
@@ -400,7 +496,11 @@ export function WorkflowSectionPage({
                     }
                 }}
             >
-                {canCreateUser ? 'إضافة مستخدم' : 'إنشاء طلب'}
+                {canCreateUser
+                    ? 'إضافة مستخدم'
+                    : section === 'results'
+                      ? 'إنشاء طلب تحليل'
+                      : 'إنشاء طلب'}
             </PrimaryButton>
         ) : undefined;
 
@@ -409,7 +509,7 @@ export function WorkflowSectionPage({
             title={titles[section]}
             description={
                 section === 'results'
-                    ? 'أدخل النتائج بعد استلام العينات، ثم اعتمدها لنشرها في بوابة المريض.'
+                    ? 'لإضافة نتيجة جديدة، أنشئ طلب تحليل ثم سجّل استلام عينته. بعدها يمكنك إدخال القيمة يدويًا وإرفاق تقرير PDF للمراجعة.'
                     : section === 'patient-results'
                       ? 'تظهر هنا النتائج التي اعتمدها المختبر فقط.'
                       : 'تعرض البيانات التي يسمح بها دور حسابك من خلال واجهة الـAPI.'
@@ -423,6 +523,21 @@ export function WorkflowSectionPage({
                 >
                     {error}
                 </div>
+            )}
+
+            {section === 'results' && (
+                <aside
+                    aria-label="خطوات إدخال نتيجة جديدة"
+                    className="grid gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900 sm:grid-cols-[auto_1fr]"
+                >
+                    <span className="font-semibold">طريقة العمل</span>
+                    <p>
+                        أنشئ طلب تحليل جديدًا، ثم سجّل استلام العينة من الجدول.
+                        سيظهر بعدها زر <strong>إدخال نتيجة</strong> لكتابة
+                        النتيجة يدويًا أو إرفاق PDF. النتائج المعتمدة للعرض فقط
+                        ولا يمكن تعديلها.
+                    </p>
+                </aside>
             )}
 
             {section !== 'reports' && (
@@ -479,6 +594,9 @@ export function WorkflowSectionPage({
                     onCollectSample={(sampleId) => void collectSample(sampleId)}
                     onEditResult={openResultEditor}
                     onApproveResult={(resultId) => void approveResult(resultId)}
+                    onDownloadResultDocument={(resultId) =>
+                        void downloadResultDocument(resultId)
+                    }
                 />
             )}
 
@@ -518,8 +636,26 @@ export function WorkflowSectionPage({
                     tests={tests}
                     errors={errors}
                     busy={busy}
+                    documentPreviewUrl={
+                        editor.kind === 'result' &&
+                        documentPreview?.resultId === editor.resultId
+                            ? (documentPreview?.url ?? null)
+                            : null
+                    }
+                    documentError={documentError}
+                    previewingDocument={
+                        editor.kind === 'result' &&
+                        previewingDocumentId === editor.resultId
+                    }
                     onChange={updateValue}
-                    onClose={() => setEditor(null)}
+                    onPdfChange={updateResultPdf}
+                    onRemovePdfChange={toggleResultPdfRemoval}
+                    onPreviewDocument={previewResultDocument}
+                    onClose={() => {
+                        setEditor(null);
+                        setDocumentPreview(null);
+                        setDocumentError('');
+                    }}
                     onSubmit={saveEditor}
                 />
             )}

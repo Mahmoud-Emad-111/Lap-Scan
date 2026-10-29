@@ -26,6 +26,15 @@ class LabResultResource extends JsonResource
             'unit' => $this->unit,
             'reference_range' => $this->reference_range,
             'notes' => $this->notes,
+            'has_pdf' => $request->user()?->role->canManageOrders()
+                ? $this->document_path !== null
+                : null,
+            'document_name' => $request->user()?->role->canManageOrders()
+                ? $this->document_name
+                : null,
+            'document_size' => $request->user()?->role->canManageOrders()
+                ? $this->document_size
+                : null,
             'status' => $this->status->value,
             'version' => $this->version,
             'entered_by' => $this->entered_by,

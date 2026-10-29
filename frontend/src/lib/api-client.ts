@@ -33,7 +33,7 @@ export class ApiError extends Error {
 export async function apiRequest<T>(
     route: ApiRoute | string,
     token?: string,
-    body?: Record<string, unknown>,
+    body?: Record<string, unknown> | FormData,
 ): Promise<T> {
     const url = resolveApiUrl(route);
     const method =
@@ -46,7 +46,9 @@ export async function apiRequest<T>(
         headers.set('Authorization', `Bearer ${token}`);
     }
 
-    if (body) {
+    const isFormData = body instanceof FormData;
+
+    if (body && !isFormData) {
         headers.set('Content-Type', 'application/json');
     }
 
@@ -56,7 +58,7 @@ export async function apiRequest<T>(
         response = await fetch(resolveApiUrl(url), {
             method: method.toUpperCase(),
             headers,
-            body: body ? JSON.stringify(body) : undefined,
+            body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
             credentials: 'same-origin',
         });
     } catch {
@@ -92,13 +94,28 @@ export async function downloadAuthorizedFile(
     token: string,
     filename: string,
 ): Promise<void> {
+    const blob = await fetchAuthorizedFile(url, token);
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+}
+
+export async function fetchAuthorizedFile(
+    url: string,
+    token: string,
+): Promise<Blob> {
     let response: Response;
 
     try {
         response = await fetch(resolveApiUrl(url), {
             headers: {
                 Accept: 'application/pdf',
-                Authorization: `******`,
+                Authorization: `Bearer ${token}`,
             },
             credentials: 'same-origin',
         });
@@ -120,19 +137,11 @@ export async function downloadAuthorizedFile(
                 : {};
 
         throw new ApiError(
-            errorPayload.message ?? 'تعذّر تنزيل الملف.',
+            errorPayload.message ?? 'تعذّر تحميل ملف PDF.',
             response.status,
             errorPayload.errors ?? {},
         );
     }
 
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = objectUrl;
-    link.download = filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(objectUrl);
+    return response.blob();
 }

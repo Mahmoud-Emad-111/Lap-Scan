@@ -16,6 +16,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LabResultController extends Controller
 {
@@ -46,15 +48,37 @@ class LabResultController extends Controller
     ): JsonResponse {
         Gate::authorize('view', $orderItem->order);
 
+        $attributes = $request->validated();
+        unset($attributes['pdf'], $attributes['remove_pdf']);
+
         $result = $saveLabResult->handle(
             $orderItem,
-            $request->validated(),
+            $attributes,
             $request->user(),
+            $request->file('pdf'),
+            $request->boolean('remove_pdf'),
         );
 
         return LabResultResource::make($result->load('orderItem.order.patient'))
             ->response()
             ->setStatusCode(201);
+    }
+
+    public function document(LabResult $result): StreamedResponse
+    {
+        Gate::authorize('downloadDocument', $result);
+
+        abort_if($result->document_path === null, 404);
+        abort_unless(Storage::disk('local')->exists($result->document_path), 404);
+
+        return Storage::disk('local')->download(
+            $result->document_path,
+            'lab-result-'.$result->id.'.pdf',
+            [
+                'Content-Type' => 'application/pdf',
+                'X-Content-Type-Options' => 'nosniff',
+            ],
+        );
     }
 
     public function approve(

@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../../wayfinder'
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::store
- * @see app/Http/Controllers/Api/V1/LabResultController.php:42
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:44
  * @route '/api/v1/order-items/{orderItem}/result'
  */
 export const store = (args: { orderItem: string | number | { id: string | number } } | [orderItem: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
@@ -16,7 +16,7 @@ store.definition = {
 
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::store
- * @see app/Http/Controllers/Api/V1/LabResultController.php:42
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:44
  * @route '/api/v1/order-items/{orderItem}/result'
  */
 store.url = (args: { orderItem: string | number | { id: string | number } } | [orderItem: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
@@ -49,7 +49,7 @@ store.url = (args: { orderItem: string | number | { id: string | number } } | [o
 
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::store
- * @see app/Http/Controllers/Api/V1/LabResultController.php:42
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:44
  * @route '/api/v1/order-items/{orderItem}/result'
  */
 store.post = (args: { orderItem: string | number | { id: string | number } } | [orderItem: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'post'> => ({
@@ -59,7 +59,7 @@ store.post = (args: { orderItem: string | number | { id: string | number } } | [
 
     /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::store
- * @see app/Http/Controllers/Api/V1/LabResultController.php:42
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:44
  * @route '/api/v1/order-items/{orderItem}/result'
  */
     const storeForm = (args: { orderItem: string | number | { id: string | number } } | [orderItem: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({
@@ -69,7 +69,7 @@ store.post = (args: { orderItem: string | number | { id: string | number } } | [
 
             /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::store
- * @see app/Http/Controllers/Api/V1/LabResultController.php:42
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:44
  * @route '/api/v1/order-items/{orderItem}/result'
  */
         storeForm.post = (args: { orderItem: string | number | { id: string | number } } | [orderItem: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'post'> => ({

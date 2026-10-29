@@ -35,6 +35,9 @@ export type ResultRecord = {
     notes: string | null;
     status: 'draft' | 'approved';
     approved_at: string | null;
+    has_pdf: boolean;
+    document_name: string | null;
+    document_size: number | null;
 };
 export type OrderItem = {
     id: number;
@@ -90,6 +93,20 @@ export type Editor =
           kind: 'result';
           orderItemId: number;
           resultId?: number;
+          context: {
+              orderNumber?: string;
+              patientName?: string;
+              branchName?: string;
+              testName: string;
+              specimenType: string;
+              sampleBarcode?: string;
+              priority?: 'normal' | 'urgent';
+          };
+          hasPdf: boolean;
+          documentName: string | null;
+          documentSize: number | null;
+          pdf: File | null;
+          removePdf: boolean;
           values: Record<string, Value>;
       };
 

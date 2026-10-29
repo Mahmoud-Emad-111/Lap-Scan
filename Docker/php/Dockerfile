@@ -13,17 +13,12 @@ RUN apt-get update && apt-get install -y \
         mbstring \
         intl \
         zip \
+    && printf 'upload_max_filesize=10M\npost_max_size=12M\n' > /usr/local/etc/php/conf.d/uploads.ini \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-    # Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
-    && apt-get install -y nodejs \
-    && node --version \
-    && npm --version
-
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+    # Install Composer
+    COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 FROM base AS build
 
@@ -42,14 +37,6 @@ COPY . .
 # Laravel packages / Wayfinder
 RUN php artisan package:discover --ansi
 
-# Frontend dependencies
-COPY package*.json ./
-
-RUN npm ci
-
-# Vite + Wayfinder
-RUN npm run build
-
 # Optimize Laravel
 RUN composer dump-autoload --optimize
 
@@ -63,11 +50,6 @@ COPY . .
 RUN composer install \
     --no-interaction \
     --prefer-dist
-
-# COPY package*.json ./
-
-# RUN npm ci
-
 
 RUN chown -R www-data:www-data \
     storage \
@@ -90,4 +72,3 @@ COPY --from=build /var/www/html /var/www/html
 USER www-data
 
 CMD ["php-fpm"]
-

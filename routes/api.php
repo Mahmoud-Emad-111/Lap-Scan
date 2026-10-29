@@ -52,6 +52,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('/samples/{sample}/collection', [SampleController::class, 'collect'])->name('samples.collect');
         Route::get('/results', [LabResultController::class, 'index'])->name('results.index');
         Route::post('/order-items/{orderItem}/result', [LabResultController::class, 'store'])->name('order-items.results.store');
+        Route::get('/results/{result}/document', [LabResultController::class, 'document'])
+            ->name('results.document');
         Route::get('/results/{result}/revisions', [LabResultController::class, 'revisions'])->name('results.revisions.index');
         Route::post('/results/{result}/corrections', [LabResultController::class, 'correct'])->name('results.corrections.store');
         Route::post('/results/{result}/approval', [LabResultController::class, 'approve'])->name('results.approve');

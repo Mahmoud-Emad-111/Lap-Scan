@@ -12,6 +12,9 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property LabResultStatus $status
+ * @property string|null $document_path
+ * @property string|null $document_name
+ * @property int|null $document_size
  * @property Carbon $entered_at
  * @property Carbon|null $approved_at
  * @property int $version

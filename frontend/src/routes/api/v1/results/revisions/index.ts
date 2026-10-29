@@ -1,7 +1,7 @@
 import { queryParams, type RouteQueryOptions, type RouteDefinition, type RouteFormDefinition, applyUrlDefaults } from './../../../../../wayfinder'
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
 export const index = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -16,7 +16,7 @@ index.definition = {
 
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
 index.url = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions) => {
@@ -49,7 +49,7 @@ index.url = (args: { result: string | number | { id: string | number } } | [resu
 
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
 index.get = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'get'> => ({
@@ -58,7 +58,7 @@ index.get = (args: { result: string | number | { id: string | number } } | [resu
 })
 /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
 index.head = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteDefinition<'head'> => ({
@@ -68,7 +68,7 @@ index.head = (args: { result: string | number | { id: string | number } } | [res
 
     /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
     const indexForm = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -78,7 +78,7 @@ index.head = (args: { result: string | number | { id: string | number } } | [res
 
             /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
         indexForm.get = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
@@ -87,7 +87,7 @@ index.head = (args: { result: string | number | { id: string | number } } | [res
         })
             /**
 * @see \App\Http\Controllers\Api\V1\LabResultController::index
- * @see app/Http/Controllers/Api/V1/LabResultController.php:87
+ * @see app/Http/Controllers/Api/V1/LabResultController.php:111
  * @route '/api/v1/results/{result}/revisions'
  */
         indexForm.head = (args: { result: string | number | { id: string | number } } | [result: string | number | { id: string | number } ] | string | number | { id: string | number }, options?: RouteQueryOptions): RouteFormDefinition<'get'> => ({
