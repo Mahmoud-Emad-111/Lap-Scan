@@ -6,6 +6,7 @@ use App\Enums\OrderPriority;
 use App\Enums\ReferralDiscountScope;
 use App\Enums\ReferralDiscountType;
 use App\Enums\UserRole;
+use App\Events\DoctorReferralCreated;
 use App\Models\Branch;
 use App\Models\DoctorProfile;
 use App\Models\LabResult;
@@ -15,6 +16,7 @@ use App\Models\Patient;
 use App\Models\ReferralDiscountRule;
 use App\Models\Test as LabTest;
 use App\Models\User;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 
@@ -75,7 +77,16 @@ it('allows a verified doctor to submit a referral with catalog pricing and attri
         ->assertJsonPath('data.subtotal', '175.50')
         ->assertJsonPath('data.discount_amount', '17.55')
         ->assertJsonPath('data.total', '157.95')
+        ->assertJsonPath(
+            'data.order_number',
+            'LAB-'.str_pad((string) $response->json('data.id'), 6, '0', STR_PAD_LEFT),
+        )
         ->assertJsonPath('data.items.0.test_name', $test->name);
+
+    $this->getJson('/api/v1/doctor/orders?search='.$response->json('data.order_number'))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $response->json('data.id'));
 
     $this->assertDatabaseHas('orders', [
         'id' => $response->json('data.id'),
@@ -92,6 +103,53 @@ it('allows a verified doctor to submit a referral with catalog pricing and attri
         'test_id' => $test->id,
         'price' => '175.50',
     ]);
+});
+
+it('broadcasts a private branch event with no patient details after creating a referral', function () {
+    $doctor = createVerifiedDoctor();
+    createDefaultDoctorReferralDiscount();
+    $branch = Branch::factory()->create(['is_active' => true]);
+    $test = LabTest::factory()->create();
+    Sanctum::actingAs($doctor);
+    Event::fake([DoctorReferralCreated::class]);
+
+    $response = $this->postJson(
+        '/api/v1/doctor/orders',
+        createDoctorReferralPayload($branch, $test),
+    );
+    $response->assertCreated();
+    $order = Order::query()->findOrFail($response->json('data.id'));
+
+    Event::assertDispatched(
+        DoctorReferralCreated::class,
+        fn (DoctorReferralCreated $event): bool => $event->broadcastOn()[0]->name ===
+                "private-branches.{$branch->id}.orders"
+            && $event->broadcastWith() === [
+                'order_id' => $order->id,
+                'branch_id' => $branch->id,
+                'order_number' => $response->json('data.order_number'),
+                'created_at' => $order->created_at->toISOString(),
+            ],
+    );
+});
+
+it('broadcasts only once when a doctor retries the same referral request', function () {
+    $doctor = createVerifiedDoctor();
+    createDefaultDoctorReferralDiscount();
+    $branch = Branch::factory()->create(['is_active' => true]);
+    $test = LabTest::factory()->create();
+    $payload = createDoctorReferralPayload($branch, $test);
+    Sanctum::actingAs($doctor);
+    Event::fake([DoctorReferralCreated::class]);
+
+    $firstResponse = $this->postJson('/api/v1/doctor/orders', $payload);
+    $retryResponse = $this->postJson('/api/v1/doctor/orders', $payload);
+
+    $firstResponse->assertCreated();
+    $retryResponse->assertOk()
+        ->assertJsonPath('data.id', $firstResponse->json('data.id'));
+    $this->assertDatabaseCount('orders', 1);
+    Event::assertDispatchedTimes(DoctorReferralCreated::class, 1);
 });
 
 it('rejects doctor referrals unless the account is verified', function (DoctorVerificationStatus $status) {

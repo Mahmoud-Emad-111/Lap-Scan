@@ -121,7 +121,7 @@ export function DoctorProfilePage({
                     </article>
                     <form
                         onSubmit={saveProfile}
-                        className="grid gap-4 rounded-2xl border border-slate-200/70 bg-white p-5 sm:grid-cols-2"
+                        className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:grid-cols-2"
                     >
                         {(
                             [

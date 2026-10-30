@@ -1,5 +1,6 @@
 import LabResultController from '@/actions/App/Http/Controllers/Api/V1/LabResultController';
 import OrderController from '@/actions/App/Http/Controllers/Api/V1/OrderController';
+import PatientController from '@/actions/App/Http/Controllers/Api/V1/PatientController';
 import PatientPortalController from '@/actions/App/Http/Controllers/Api/V1/PatientPortalController';
 import ReportController from '@/actions/App/Http/Controllers/Api/V1/ReportController';
 import SampleController from '@/actions/App/Http/Controllers/Api/V1/SampleController';
@@ -37,7 +38,12 @@ export type WorkflowUserPayload = {
 };
 
 export type WorkflowOrderPayload = {
-    patient_id: number;
+    patient_id?: number;
+    patient_full_name?: string;
+    patient_phone?: string;
+    patient_email?: string;
+    patient_date_of_birth?: string;
+    patient_gender?: string;
     branch_id: number;
     test_ids: number[];
     notes: string;
@@ -67,9 +73,18 @@ export async function fetchWorkflowRows(
     return apiRequest<ApiPage<WorkflowRow>>(url ?? endpoint, token);
 }
 
-export function getWorkflowOrdersUrl(priority?: string): string {
+export function getWorkflowOrdersUrl(
+    filters: {
+        search?: string;
+        status?: string;
+        priority?: string;
+        branch_id?: string;
+        from?: string;
+        to?: string;
+    } = {},
+): string {
     return OrderController.index({
-        query: priority ? { priority } : {},
+        query: filters,
     }).url;
 }
 
@@ -95,8 +110,13 @@ export async function fetchBranchOptions(
 
 export async function fetchPatientOptions(
     token: string,
+    search?: string,
 ): Promise<PatientOption[]> {
-    return (await fetchPatients(token)).data.map(
+    const url = search
+        ? PatientController.index({ query: { search } }).url
+        : undefined;
+
+    return (await fetchPatients(token, url)).data.map(
         ({ id, full_name, phone }: Patient) => ({ id, full_name, phone }),
     );
 }
@@ -130,22 +150,22 @@ export async function saveWorkflowResult(
     token: string,
     orderItemId: number,
     payload: WorkflowResultPayload,
-    pdf: File | null,
-    removePdf: boolean,
+    document: File | null,
+    removeDocument: boolean,
 ): Promise<void> {
     let body: Record<string, unknown> | FormData = payload;
 
-    if (pdf || removePdf) {
+    if (document || removeDocument) {
         const formData = new FormData();
 
         Object.entries(payload).forEach(([key, value]) => {
             formData.append(key, value);
         });
 
-        if (pdf) {
-            formData.append('pdf', pdf);
+        if (document) {
+            formData.append('document', document);
         } else {
-            formData.append('remove_pdf', '1');
+            formData.append('remove_document', '1');
         }
 
         body = formData;
@@ -165,7 +185,7 @@ export async function downloadWorkflowResultDocument(
     await downloadAuthorizedFile(
         LabResultController.document({ result: resultId }).url,
         token,
-        `lab-result-${resultId}.pdf`,
+        `lab-result-${resultId}`,
     );
 }
 

@@ -34,6 +34,7 @@ export function WorkflowTable({
     rows,
     currentUserId,
     query,
+    onViewOrder,
     onEditUser,
     onCollectSample,
     onEditResult,
@@ -44,6 +45,7 @@ export function WorkflowTable({
     rows: WorkflowRow[];
     currentUserId: number;
     query: string;
+    onViewOrder: (order: WorkflowRow) => void;
     onEditUser: (user: WorkflowRow) => void;
     onCollectSample: (sampleId: number) => void;
     onEditResult: (item: OrderItem, order: WorkflowRow) => void;
@@ -101,6 +103,7 @@ export function WorkflowTable({
                     'الأولوية',
                     'الإجمالي',
                     'التاريخ',
+                    ...(section === 'orders' ? ['الإجراءات'] : []),
                 ]}
             >
                 {rows.map((order) => (
@@ -165,6 +168,14 @@ export function WorkflowTable({
                                   )
                                 : '—'}
                         </TableCell>
+                        {section === 'orders' && (
+                            <TableCell>
+                                <ActionButton
+                                    label="عرض الطلب"
+                                    onClick={() => onViewOrder(order)}
+                                />
+                            </TableCell>
+                        )}
                     </tr>
                 ))}
             </DataTable>
@@ -186,9 +197,26 @@ export function WorkflowTable({
             >
                 {rows.map((sample) => (
                     <tr key={sample.id}>
-                        <TableCell>{sample.barcode}</TableCell>
-                        <TableCell>{sample.patient_name}</TableCell>
-                        <TableCell>{sample.test_name}</TableCell>
+                        <TableCell className="font-semibold text-slate-700">
+                            <span dir="ltr">{sample.barcode}</span>
+                        </TableCell>
+                        <TableCell>
+                            <div className="flex items-center gap-2.5">
+                                <span
+                                    aria-hidden="true"
+                                    className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700"
+                                >
+                                    {sample.patient_name?.trim().slice(0, 1) ||
+                                        '—'}
+                                </span>
+                                <span className="font-medium text-slate-700">
+                                    {sample.patient_name ?? '—'}
+                                </span>
+                            </div>
+                        </TableCell>
+                        <TableCell className="font-medium text-slate-700">
+                            {sample.test_name ?? '—'}
+                        </TableCell>
                         <TableCell>{sample.specimen_type}</TableCell>
                         <TableCell>
                             <StatusBadge status={sample.status} />
@@ -259,9 +287,11 @@ export function WorkflowTable({
                             <TableCell>
                                 {item.result?.value ?? '—'}{' '}
                                 {item.result?.unit ?? ''}
-                                {item.result?.has_pdf && (
+                                {item.result?.has_document && (
                                     <span className="mt-1 block text-xs text-slate-500">
-                                        تقرير PDF مرفق
+                                        {item.result.document_type === 'pdf'
+                                            ? 'تقرير PDF مرفق'
+                                            : 'صورة نتيجة مرفقة'}
                                     </span>
                                 )}
                             </TableCell>
@@ -314,10 +344,10 @@ export function WorkflowTable({
                                         لا توجد عينة مرتبطة بهذا التحليل.
                                     </span>
                                 ) : null}
-                                {item.result?.has_pdf &&
+                                {item.result?.has_document &&
                                     resultId !== undefined && (
                                         <ActionButton
-                                            label="تنزيل PDF"
+                                            label="تنزيل المرفق"
                                             onClick={() =>
                                                 onDownloadResultDocument(
                                                     resultId,

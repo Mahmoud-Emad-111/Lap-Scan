@@ -17,17 +17,11 @@
 
 html {
     min-width: 360px;
-    background: #f3f6f5;
+    background: #f7f8fa;
 }
 
 body {
-    background:
-        radial-gradient(
-            ellipse at 92% 0%,
-            rgb(221 239 233 / 42%),
-            transparent 31rem
-        ),
-        #f3f6f5;
+    background: #f7f8fa;
     color: #233735;
     font-family: var(--font-sans);
     text-rendering: optimizeLegibility;

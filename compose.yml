@@ -6,8 +6,64 @@ services:
       target: development
     volumes:
       - ./:/var/www/html
+    environment:
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
     depends_on:
       - mysql
+    networks:
+      - laravel
+  queue:
+    build:
+      context: .
+      dockerfile: Docker/php/Dockerfile
+      target: development
+    command: php artisan queue:work database --sleep=1 --tries=3 --timeout=60
+    restart: unless-stopped
+    volumes:
+      - ./:/var/www/html
+    environment:
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - laravel
+  reverb:
+    build:
+      context: .
+      dockerfile: Docker/php/Dockerfile
+      target: development
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    restart: unless-stopped
+    ports:
+      - "${REVERB_PUBLISH_PORT:-8080}:8080"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - laravel
+    networks:
+      - laravel
+  frontend:
+    build:
+      context: .
+      dockerfile: Docker/Frontend/Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost}
+      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
+      VITE_REVERB_HOST: ${VITE_REVERB_BROWSER_HOST:-localhost}
+      VITE_REVERB_PORT: ${VITE_REVERB_BROWSER_PORT:-8082}
+      VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - laravel
     networks:
       - laravel
   mysql:
@@ -43,6 +99,10 @@ services:
       dockerfile: Docker/Nginx/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
+        VITE_REVERB_HOST: ${VITE_REVERB_BROWSER_HOST:-localhost}
+        VITE_REVERB_PORT: ${VITE_REVERB_BROWSER_PORT:-8082}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
     ports:
       - "80:80"
       - "443:443"
@@ -61,7 +121,7 @@ services:
       PMA_USER: ${DB_USERNAME}
       PMA_PASSWORD: ${DB_PASSWORD}
     ports:
-      - "8080:80"
+      - "8081:80"
     depends_on:
       - mysql
     networks:

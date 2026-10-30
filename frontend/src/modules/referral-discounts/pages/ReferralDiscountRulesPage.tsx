@@ -201,7 +201,7 @@ export function ReferralDiscountRulesPage({
 
             <form
                 onSubmit={submitRule}
-                className="grid gap-5 rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm sm:p-6"
+                className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:p-6"
             >
                 <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
                     <div className="grid gap-1">

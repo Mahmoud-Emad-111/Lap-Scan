@@ -40,6 +40,25 @@ export function fetchBranches(
     return apiRequest<ApiPage<Branch>>(url ?? BranchController.index(), token);
 }
 
+export async function fetchRealtimeBranchIds(token: string): Promise<number[]> {
+    let response = await fetchBranches(token);
+    const branchIds: number[] = [];
+
+    while (true) {
+        branchIds.push(
+            ...response.data
+                .filter((branch) => branch.is_active)
+                .map((branch) => branch.id),
+        );
+
+        if (!response.links.next) {
+            return branchIds;
+        }
+
+        response = await fetchBranches(token, response.links.next);
+    }
+}
+
 export async function fetchDashboardSummary(
     token: string,
 ): Promise<DashboardSummary> {

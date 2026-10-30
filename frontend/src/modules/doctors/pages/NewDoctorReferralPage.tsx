@@ -60,6 +60,8 @@ export function NewDoctorReferralPage({
     const [urgentReason, setUrgentReason] = useState('');
     const [branchId, setBranchId] = useState('');
     const [testIds, setTestIds] = useState<number[]>([]);
+    const [testSearch, setTestSearch] = useState('');
+    const [applyDiscount, setApplyDiscount] = useState(false);
     const [notes, setNotes] = useState('');
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [error, setError] = useState('');
@@ -149,6 +151,7 @@ export function NewDoctorReferralPage({
                 patient_gender: patient.gender || null,
                 branch_id: Number(branchId),
                 test_ids: testIds,
+                apply_discount: applyDiscount,
                 priority,
                 urgent_reason: priority === 'urgent' ? urgentReason : null,
                 notes: notes || null,
@@ -170,6 +173,18 @@ export function NewDoctorReferralPage({
             setBusy(false);
         }
     }
+
+    const matchingTests = tests.filter((test) =>
+        `${test.name} ${test.code}`
+            .toLocaleLowerCase('ar')
+            .includes(testSearch.trim().toLocaleLowerCase('ar')),
+    );
+    const selectedSubtotalInCents = tests
+        .filter((test) => testIds.includes(test.id))
+        .reduce(
+            (total, test) => total + Math.round(Number(test.price) * 100),
+            0,
+        );
 
     return (
         <PageShell
@@ -218,7 +233,7 @@ export function NewDoctorReferralPage({
                     )}
                     <form
                         onSubmit={submitReferral}
-                        className="grid gap-5 rounded-2xl border border-slate-200/70 bg-white p-5 sm:p-6"
+                        className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:p-6"
                     >
                         <section className="grid gap-4 sm:grid-cols-2">
                             <h3 className="font-bold text-slate-900 sm:col-span-2">
@@ -405,12 +420,47 @@ export function NewDoctorReferralPage({
                                     <option value="urgent">عاجلة</option>
                                 </select>
                             </label>
+                            <label className="border-brand-200 flex cursor-pointer items-start justify-between gap-4 rounded-xl border bg-brand-50/70 p-4 text-sm sm:col-span-2">
+                                <span className="grid gap-1">
+                                    <span className="font-semibold text-slate-900">
+                                        تطبيق خصم الإحالة على المريض
+                                    </span>
+                                    <span className="text-xs leading-5 text-slate-600">
+                                        اختياري وغير مفعّل تلقائيًا. عند تفعيله،
+                                        يطبّق النظام الخصم إذا وُجدت قاعدة سارية
+                                        تنطبق على الإحالة؛ وإلا يُحسب الطلب بالسعر
+                                        الكامل.
+                                    </span>
+                                </span>
+                                <input
+                                    type="checkbox"
+                                    checked={applyDiscount}
+                                    onChange={(event) =>
+                                        setApplyDiscount(event.target.checked)
+                                    }
+                                    className="mt-0.5 size-5 shrink-0 accent-brand-600"
+                                />
+                            </label>
                             <fieldset className="grid gap-2 sm:col-span-2">
                                 <legend className="text-sm font-medium text-slate-700">
                                     التحاليل المطلوبة
                                 </legend>
-                                <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
-                                    {tests.map((test) => (
+                                <label className="grid gap-2">
+                                    <span className="sr-only">
+                                        ابحث عن تحليل
+                                    </span>
+                                    <input
+                                        type="search"
+                                        value={testSearch}
+                                        onChange={(event) =>
+                                            setTestSearch(event.target.value)
+                                        }
+                                        placeholder="ابحث باسم التحليل أو الكود"
+                                        className={inputClass}
+                                    />
+                                </label>
+                                <div className="grid max-h-64 gap-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2">
+                                    {matchingTests.map((test) => (
                                         <label
                                             key={test.id}
                                             className="flex items-start gap-2 text-sm text-slate-700"
@@ -444,6 +494,29 @@ export function NewDoctorReferralPage({
                                             </span>
                                         </label>
                                     ))}
+                                    {matchingTests.length === 0 && (
+                                        <p className="text-sm text-slate-500 sm:col-span-2">
+                                            لا توجد تحاليل مطابقة للبحث.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-3 text-sm">
+                                    <span className="text-slate-700">
+                                        التحاليل المختارة:{' '}
+                                        <strong>{testIds.length}</strong>
+                                    </span>
+                                    <span className="text-brand-800 font-bold">
+                                        المجموع التقديري قبل الخصم:{' '}
+                                        {formatPrice(
+                                            (
+                                                selectedSubtotalInCents / 100
+                                            ).toFixed(2),
+                                        )}
+                                    </span>
+                                    <span className="basis-full text-xs font-normal text-slate-500">
+                                        قد يختلف الإجمالي النهائي بعد تطبيق خصم
+                                        الإحالة؛ يعرضه النظام بعد إرسال الإحالة.
+                                    </span>
                                 </div>
                                 <FieldError message={errors.test_ids?.[0]} />
                             </fieldset>

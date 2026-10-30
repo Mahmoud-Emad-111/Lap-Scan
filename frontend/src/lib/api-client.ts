@@ -8,7 +8,7 @@ type ApiRoute = Pick<
 export type ApiValidationErrors = Record<string, string[]>;
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '') ?? '';
 
-function resolveApiUrl(route: ApiRoute | string): string {
+export function resolveApiUrl(route: ApiRoute | string): string {
     const url = typeof route === 'string' ? route : route.url;
 
     return apiBaseUrl ? new URL(url, `${apiBaseUrl}/`).toString() : url;
@@ -98,7 +98,9 @@ export async function downloadAuthorizedFile(
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = objectUrl;
-    link.download = filename;
+    link.download = filename.includes('.')
+        ? filename
+        : `${filename}.${fileExtension(blob.type)}`;
     document.body.append(link);
     link.click();
     link.remove();
@@ -114,7 +116,7 @@ export async function fetchAuthorizedFile(
     try {
         response = await fetch(resolveApiUrl(url), {
             headers: {
-                Accept: 'application/pdf',
+                Accept: 'application/pdf, image/*',
                 Authorization: `Bearer ${token}`,
             },
             credentials: 'same-origin',
@@ -137,11 +139,22 @@ export async function fetchAuthorizedFile(
                 : {};
 
         throw new ApiError(
-            errorPayload.message ?? 'تعذّر تحميل ملف PDF.',
+            errorPayload.message ?? 'تعذّر تحميل المرفق.',
             response.status,
             errorPayload.errors ?? {},
         );
     }
 
     return response.blob();
+}
+
+function fileExtension(mimeType: string): string {
+    const extensions: Record<string, string> = {
+        'application/pdf': 'pdf',
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+    };
+
+    return extensions[mimeType] ?? 'bin';
 }

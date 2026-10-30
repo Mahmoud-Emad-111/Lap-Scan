@@ -94,6 +94,7 @@ export type DoctorReferralPayload = {
     patient_gender: string | null;
     branch_id: number;
     test_ids: number[];
+    apply_discount: boolean;
     priority: 'normal' | 'urgent';
     urgent_reason: string | null;
     notes: string | null;

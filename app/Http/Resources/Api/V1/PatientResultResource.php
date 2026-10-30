@@ -18,7 +18,7 @@ class PatientResultResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'order_number' => $this->orderItem->order->order_number,
+            'order_number' => $this->orderItem->order->displayNumber(),
             'test_name' => $this->orderItem->test_name,
             'value' => $this->value,
             'unit' => $this->unit,

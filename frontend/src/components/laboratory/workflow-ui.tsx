@@ -35,15 +35,16 @@ export function PageShell({
     action?: ReactNode;
 }) {
     return (
-        <section className="grid gap-6">
+        <section className="grid gap-5">
             <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
                 <div className="grid gap-2">
-                    <div className="flex items-center gap-2 text-[11px] font-semibold text-brand-700">
-                        <span className="size-1.5 rounded-full bg-brand-500" />
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
                         إدارة المختبر
+                        <span aria-hidden="true">/</span>
+                        <span className="text-brand-700">{title}</span>
                     </div>
                     <div className="grid gap-1">
-                        <h2 className="text-2xl font-bold tracking-tight text-ink-950">
+                        <h2 className="text-2xl font-bold tracking-tight text-ink-950 sm:text-[1.7rem]">
                             {title}
                         </h2>
                         <p className="max-w-2xl text-sm leading-6 text-slate-500">
@@ -66,22 +67,22 @@ export function DataTable({
     children: ReactNode;
 }) {
     return (
-        <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_8px_24px_-22px_rgba(20,54,49,0.5)]">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)]">
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] border-collapse text-right text-sm">
-                    <thead className="bg-[#f7f9f8] text-[11px] font-bold text-slate-500">
+                    <thead className="bg-slate-50 text-[11px] font-bold text-slate-500">
                         <tr>
                             {headings.map((heading) => (
                                 <th
                                     key={heading}
-                                    className="border-b border-slate-200/70 px-5 py-4.5 whitespace-nowrap"
+                                    className="border-b border-slate-200 px-5 py-4.5 whitespace-nowrap"
                                 >
                                     {heading}
                                 </th>
                             ))}
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 [&_tr]:transition-colors [&_tr:hover]:bg-[#f8fbfa]">
+                    <tbody className="divide-y divide-slate-100 [&_tr]:transition-colors [&_tr:hover]:bg-brand-50/40">
                         {children}
                     </tbody>
                 </table>
@@ -122,7 +123,7 @@ export function PrimaryButton({
             type={type}
             disabled={disabled}
             onClick={onClick}
-            className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-700 px-5 text-sm font-semibold text-white shadow-sm shadow-brand-700/15 transition hover:-translate-y-0.5 hover:bg-brand-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+            className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm shadow-brand-700/15 transition hover:bg-brand-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
         >
             {children}
         </button>

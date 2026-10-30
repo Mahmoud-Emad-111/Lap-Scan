@@ -7,6 +7,7 @@ use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Models\Branch;
 use App\Models\Order;
+use App\Models\Patient;
 use App\Models\Test;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +22,7 @@ class CreateOrderAction
     ) {}
 
     /**
-     * @param  array{patient_id: int, branch_id: int, test_ids: list<int>, notes?: string|null, referring_doctor_id?: int|null, source?: OrderSource, priority?: OrderPriority, urgent_reason?: string|null, request_key?: string|null}  $attributes
+     * @param  array{patient_id?: int|null, patient_full_name?: string, patient_phone?: string, patient_email?: string|null, patient_date_of_birth?: string|null, patient_gender?: string|null, branch_id: int, test_ids: list<int>, notes?: string|null, referring_doctor_id?: int|null, source?: OrderSource, priority?: OrderPriority, urgent_reason?: string|null, request_key?: string|null}  $attributes
      * @param  array{doctor: User, branch: Branch, is_first_referral: bool}|null  $discountContext
      */
     public function handle(
@@ -30,6 +31,28 @@ class CreateOrderAction
         ?array $discountContext = null,
     ): Order {
         return DB::transaction(function () use ($attributes, $creator, $discountContext): Order {
+            $patientId = $attributes['patient_id'] ?? null;
+
+            if ($patientId === null) {
+                $patientFullName = $attributes['patient_full_name'] ?? null;
+                $patientPhone = $attributes['patient_phone'] ?? null;
+
+                if ($patientFullName === null || $patientPhone === null) {
+                    throw ValidationException::withMessages([
+                        'patient_full_name' => 'اسم المريض ورقم الهاتف مطلوبان لإنشاء سجل جديد.',
+                    ]);
+                }
+
+                $patient = Patient::query()->create([
+                    'full_name' => $patientFullName,
+                    'phone' => $patientPhone,
+                    'email' => $attributes['patient_email'] ?? null,
+                    'date_of_birth' => $attributes['patient_date_of_birth'] ?? null,
+                    'gender' => $attributes['patient_gender'] ?? null,
+                ]);
+                $patientId = $patient->id;
+            }
+
             $tests = Test::query()
                 ->whereIn('id', $attributes['test_ids'])
                 ->where('is_active', true)
@@ -76,7 +99,7 @@ class CreateOrderAction
             $order = Order::query()->create([
                 'order_number' => 'LAB-'.now()->format('Ymd').'-'.Str::upper((string) Str::ulid()),
                 'branch_id' => $attributes['branch_id'],
-                'patient_id' => $attributes['patient_id'],
+                'patient_id' => $patientId,
                 'created_by' => $creator->id,
                 'referring_doctor_id' => $attributes['referring_doctor_id'] ?? null,
                 'status' => OrderStatus::Registered,

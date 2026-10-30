@@ -35,7 +35,9 @@ export type ResultRecord = {
     notes: string | null;
     status: 'draft' | 'approved';
     approved_at: string | null;
+    has_document: boolean;
     has_pdf: boolean;
+    document_type: 'pdf' | 'image' | null;
     document_name: string | null;
     document_size: number | null;
 };
@@ -54,8 +56,9 @@ export type WorkflowRow = {
     role?: UserRole;
     branches?: BranchOption[];
     order_number?: string;
-    patient?: { full_name: string };
-    branch?: { name: string };
+    source?: 'direct' | 'doctor';
+    patient?: { id: number; full_name: string };
+    branch?: { id: number; name: string };
     status?: string;
     priority?: 'normal' | 'urgent';
     urgent_reason?: string | null;
@@ -64,7 +67,9 @@ export type WorkflowRow = {
     discount_amount?: string;
     discount?: { name: string } | null;
     total?: string;
+    notes?: string | null;
     created_at?: string;
+    expected_result_at?: string | null;
     items?: OrderItem[];
     barcode?: string;
     specimen_type?: string;
@@ -102,11 +107,12 @@ export type Editor =
               sampleBarcode?: string;
               priority?: 'normal' | 'urgent';
           };
-          hasPdf: boolean;
+          hasDocument: boolean;
+          documentType: 'pdf' | 'image' | null;
           documentName: string | null;
           documentSize: number | null;
-          pdf: File | null;
-          removePdf: boolean;
+          document: File | null;
+          removeDocument: boolean;
           values: Record<string, Value>;
       };
 

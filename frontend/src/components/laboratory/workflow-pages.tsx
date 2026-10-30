@@ -1,7 +1,8 @@
 import type { FormEvent } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
 import { WorkflowEditor } from '@/components/laboratory/workflow-editor';
+import { OrderDetailsDialog } from '@/components/laboratory/order-details-dialog';
 import {
     displayStatus,
     getValue,
@@ -33,6 +34,7 @@ import {
     fetchWorkflowResultDocument,
     fetchWorkflowRows,
     getWorkflowOrdersUrl,
+    type WorkflowOrderPayload,
     saveWorkflowResult,
     saveWorkflowUser,
 } from '@/modules/laboratory/services/workflowApi';
@@ -54,24 +56,35 @@ export function WorkflowSectionPage({
     role,
     currentUserId,
     onNotice,
+    orderRealtimeRevision,
+    initialOrderSearch,
 }: {
     section: WorkflowSection;
     token: string;
     role: UserRole;
     currentUserId: number;
     onNotice: (message: string) => void;
+    orderRealtimeRevision: number;
+    initialOrderSearch?: string;
 }) {
     const [page, setPage] = useState<ApiPage<WorkflowRow> | null>(null);
     const [report, setReport] = useState<ReportData | null>(null);
     const [branches, setBranches] = useState<BranchOption[]>([]);
     const [patients, setPatients] = useState<PatientOption[]>([]);
     const [tests, setTests] = useState<TestOption[]>([]);
-    const [query, setQuery] = useState('');
+    const [query, setQuery] = useState(initialOrderSearch ?? '');
     const [priorityFilter, setPriorityFilter] = useState('');
+    const [orderStatusFilter, setOrderStatusFilter] = useState('');
+    const [branchFilter, setBranchFilter] = useState('');
+    const [dateFromFilter, setDateFromFilter] = useState('');
+    const [dateToFilter, setDateToFilter] = useState('');
+    const [sampleStatusFilter, setSampleStatusFilter] = useState('');
     const [editor, setEditor] = useState<Editor | null>(null);
+    const [orderToView, setOrderToView] = useState<WorkflowRow | null>(null);
     const [documentPreview, setDocumentPreview] = useState<{
         resultId: number;
         url: string;
+        type: string;
     } | null>(null);
     const [previewingDocumentId, setPreviewingDocumentId] = useState<
         number | null
@@ -81,6 +94,8 @@ export function WorkflowSectionPage({
     const [documentError, setDocumentError] = useState('');
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const lastRequestedUrl = useRef<string | undefined>(undefined);
+    const lastHandledRealtimeRevision = useRef(orderRealtimeRevision);
 
     useEffect(() => {
         return () => {
@@ -90,8 +105,41 @@ export function WorkflowSectionPage({
         };
     }, [documentPreview]);
 
+    useEffect(() => {
+        if (section !== 'orders') {
+            return;
+        }
+
+        let cancelled = false;
+
+        async function loadBranches() {
+            try {
+                const branchOptions = await fetchBranchOptions(token);
+
+                if (!cancelled) {
+                    setBranches(branchOptions);
+                }
+            } catch (requestError) {
+                if (!cancelled) {
+                    setError(
+                        requestError instanceof Error
+                            ? requestError.message
+                            : 'تعذّر تحميل قائمة الفروع.',
+                    );
+                }
+            }
+        }
+
+        void loadBranches();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [section, token]);
+
     const loadPage = useCallback(
         async (url?: string) => {
+            lastRequestedUrl.current = url;
             setLoading(true);
             setError('');
 
@@ -107,7 +155,6 @@ export function WorkflowSectionPage({
                     );
                     setPage(response);
                     setReport(null);
-                    setQuery('');
                 }
             } catch (requestError) {
                 setError(
@@ -123,28 +170,90 @@ export function WorkflowSectionPage({
     );
 
     useEffect(() => {
-        void loadPage();
-    }, [loadPage]);
+        setQuery(initialOrderSearch ?? '');
+
+        if (section === 'orders' && initialOrderSearch) {
+            setPriorityFilter('');
+            setOrderStatusFilter('');
+            setBranchFilter('');
+            setDateFromFilter('');
+            setDateToFilter('');
+        }
+
+        void loadPage(
+            section === 'orders' && initialOrderSearch
+                ? getWorkflowOrdersUrl({ search: initialOrderSearch })
+                : undefined,
+        );
+    }, [initialOrderSearch, loadPage, section]);
+
+    useEffect(() => {
+        if (
+            section === 'orders' &&
+            lastHandledRealtimeRevision.current !== orderRealtimeRevision
+        ) {
+            lastHandledRealtimeRevision.current = orderRealtimeRevision;
+            void loadPage(lastRequestedUrl.current);
+        } else if (section !== 'orders') {
+            lastHandledRealtimeRevision.current = orderRealtimeRevision;
+        }
+    }, [loadPage, orderRealtimeRevision, section]);
 
     const filteredRows = useMemo(() => {
-        const rows = page?.data ?? [];
+        let rows = page?.data ?? [];
 
-        if (section !== 'results' || !query) {
-            return rows.filter((row) =>
+        if (query && section === 'results') {
+            rows = rows.filter((order) =>
+                order.items?.some((item) =>
+                    `${order.order_number} ${order.patient?.full_name} ${item.test_name}`
+                        .toLocaleLowerCase('ar')
+                        .includes(query.toLocaleLowerCase('ar')),
+                ),
+            );
+        } else if (query && section !== 'orders') {
+            rows = rows.filter((row) =>
                 JSON.stringify(row)
                     .toLocaleLowerCase('ar')
                     .includes(query.toLocaleLowerCase('ar')),
             );
         }
 
-        return rows.filter((order) =>
-            order.items?.some((item) =>
-                `${order.order_number} ${order.patient?.full_name} ${item.test_name}`
-                    .toLocaleLowerCase('ar')
-                    .includes(query.toLocaleLowerCase('ar')),
-            ),
-        );
-    }, [page, query, section]);
+        if (section === 'samples' && sampleStatusFilter) {
+            rows = rows.filter((row) => row.status === sampleStatusFilter);
+        }
+
+        return rows;
+    }, [page, query, sampleStatusFilter, section]);
+
+    const searchPatients = useCallback(
+        (search: string) => fetchPatientOptions(token, search),
+        [token],
+    );
+
+    function orderFilters() {
+        return {
+            ...(query.trim() ? { search: query.trim() } : {}),
+            ...(orderStatusFilter ? { status: orderStatusFilter } : {}),
+            ...(priorityFilter ? { priority: priorityFilter } : {}),
+            ...(branchFilter ? { branch_id: branchFilter } : {}),
+            ...(dateFromFilter ? { from: dateFromFilter } : {}),
+            ...(dateToFilter ? { to: dateToFilter } : {}),
+        };
+    }
+
+    function applyOrderFilters() {
+        void loadPage(getWorkflowOrdersUrl(orderFilters()));
+    }
+
+    function clearOrderFilters() {
+        setQuery('');
+        setOrderStatusFilter('');
+        setBranchFilter('');
+        setPriorityFilter('');
+        setDateFromFilter('');
+        setDateToFilter('');
+        void loadPage(getWorkflowOrdersUrl());
+    }
 
     async function openUserEditor(user?: WorkflowRow) {
         setBusy(true);
@@ -194,6 +303,7 @@ export function WorkflowSectionPage({
                 kind: 'order',
                 values: {
                     patient_id: '',
+                    patient_mode: 'existing',
                     branch_id: '',
                     test_ids: [],
                     notes: '',
@@ -227,11 +337,12 @@ export function WorkflowSectionPage({
                 sampleBarcode: item.sample?.barcode,
                 priority: order.priority,
             },
-            hasPdf: item.result?.has_pdf ?? false,
+            hasDocument: item.result?.has_document ?? false,
+            documentType: item.result?.document_type ?? null,
             documentName: item.result?.document_name ?? null,
             documentSize: item.result?.document_size ?? null,
-            pdf: null,
-            removePdf: false,
+            document: null,
+            removeDocument: false,
             values: {
                 value: item.result?.value ?? '',
                 unit: item.result?.unit ?? '',
@@ -249,18 +360,18 @@ export function WorkflowSectionPage({
         );
     }
 
-    function updateResultPdf(pdf: File | null) {
+    function updateResultDocument(document: File | null) {
         setEditor((current) =>
             current?.kind === 'result'
-                ? { ...current, pdf, removePdf: false }
+                ? { ...current, document, removeDocument: false }
                 : current,
         );
     }
 
-    function toggleResultPdfRemoval(removePdf: boolean) {
+    function toggleResultDocumentRemoval(removeDocument: boolean) {
         setEditor((current) =>
             current?.kind === 'result'
-                ? { ...current, removePdf, pdf: null }
+                ? { ...current, removeDocument, document: null }
                 : current,
         );
     }
@@ -271,14 +382,14 @@ export function WorkflowSectionPage({
         setError('');
 
         try {
-            const pdf = await fetchWorkflowResultDocument(token, resultId);
-            const url = URL.createObjectURL(pdf);
-            setDocumentPreview({ resultId, url });
+            const document = await fetchWorkflowResultDocument(token, resultId);
+            const url = URL.createObjectURL(document);
+            setDocumentPreview({ resultId, url, type: document.type });
         } catch (requestError) {
             setDocumentError(
                 requestError instanceof Error
                     ? requestError.message
-                    : 'تعذّرت معاينة ملف PDF.',
+                    : 'تعذّرت معاينة المرفق.',
             );
         } finally {
             setPreviewingDocumentId(null);
@@ -338,8 +449,33 @@ export function WorkflowSectionPage({
 
                 await saveWorkflowUser(token, editor.id, payload);
             } else if (editor.kind === 'order') {
+                const isNewPatient = getValue(values.patient_mode) === 'new';
+                const patientDetails: Pick<
+                    WorkflowOrderPayload,
+                    | 'patient_id'
+                    | 'patient_full_name'
+                    | 'patient_phone'
+                    | 'patient_email'
+                    | 'patient_date_of_birth'
+                    | 'patient_gender'
+                > = isNewPatient
+                    ? {
+                          patient_full_name: getValue(values.patient_full_name),
+                          patient_phone: getValue(values.patient_phone),
+                          patient_email:
+                              getValue(values.patient_email) || undefined,
+                          patient_date_of_birth:
+                              getValue(values.patient_date_of_birth) ||
+                              undefined,
+                          patient_gender:
+                              getValue(values.patient_gender) || undefined,
+                      }
+                    : {
+                          patient_id: Number(getValue(values.patient_id)),
+                      };
+
                 await createWorkflowOrder(token, {
-                    patient_id: Number(getValue(values.patient_id)),
+                    ...patientDetails,
                     branch_id: Number(getValue(values.branch_id)),
                     test_ids: getValues(values.test_ids).map(Number),
                     notes: getValue(values.notes),
@@ -354,8 +490,8 @@ export function WorkflowSectionPage({
                         reference_range: getValue(values.reference_range),
                         notes: getValue(values.notes),
                     },
-                    editor.pdf,
-                    editor.removePdf,
+                    editor.document,
+                    editor.removeDocument,
                 );
             }
 
@@ -363,11 +499,16 @@ export function WorkflowSectionPage({
             setDocumentPreview(null);
             setDocumentError('');
             onNotice(
-                editor.kind === 'result' && (editor.pdf || editor.removePdf)
-                    ? 'تم حفظ المسودة وتحديث مرفق PDF.'
+                editor.kind === 'result' &&
+                    (editor.document || editor.removeDocument)
+                    ? 'تم حفظ المسودة وتحديث مرفق النتيجة.'
                     : 'تم حفظ البيانات بنجاح.',
             );
-            await loadPage();
+            await loadPage(
+                section === 'orders'
+                    ? getWorkflowOrdersUrl(orderFilters())
+                    : undefined,
+            );
         } catch (requestError) {
             if (requestError instanceof ApiError) {
                 setErrors(requestError.validationErrors);
@@ -509,10 +650,12 @@ export function WorkflowSectionPage({
             title={titles[section]}
             description={
                 section === 'results'
-                    ? 'لإضافة نتيجة جديدة، أنشئ طلب تحليل ثم سجّل استلام عينته. بعدها يمكنك إدخال القيمة يدويًا وإرفاق تقرير PDF للمراجعة.'
-                    : section === 'patient-results'
-                      ? 'تظهر هنا النتائج التي اعتمدها المختبر فقط.'
-                      : 'تعرض البيانات التي يسمح بها دور حسابك من خلال واجهة الـAPI.'
+                    ? 'لإضافة نتيجة جديدة، أنشئ طلب تحليل ثم سجّل استلام عينته. بعدها يمكنك إدخال القيمة يدويًا وإرفاق تقرير PDF أو صورة للمراجعة.'
+                    : section === 'samples'
+                      ? 'راجع العينات المسجلة، وتابع حالتها، وسجّل استلامها عند وصولها إلى المختبر.'
+                      : section === 'patient-results'
+                        ? 'تظهر هنا النتائج التي اعتمدها المختبر فقط.'
+                        : 'تعرض البيانات التي يسمح بها دور حسابك من خلال واجهة الـAPI.'
             }
             action={addAction}
         >
@@ -534,36 +677,192 @@ export function WorkflowSectionPage({
                     <p>
                         أنشئ طلب تحليل جديدًا، ثم سجّل استلام العينة من الجدول.
                         سيظهر بعدها زر <strong>إدخال نتيجة</strong> لكتابة
-                        النتيجة يدويًا أو إرفاق PDF. النتائج المعتمدة للعرض فقط
-                        ولا يمكن تعديلها.
+                        النتيجة يدويًا أو إرفاق PDF أو صورة. النتائج المعتمدة
+                        للعرض فقط ولا يمكن تعديلها.
                     </p>
                 </aside>
             )}
 
             {section !== 'reports' && (
-                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/70 bg-white p-3 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.5)] sm:flex-row sm:items-center sm:justify-between sm:p-4">
-                    <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder={`بحث في ${titles[section]}`}
-                        className={`${inputClass} sm:max-w-md`}
-                    />
-                    {section === 'orders' && (
-                        <select
-                            value={priorityFilter}
-                            onChange={(event) => {
-                                const value = event.target.value;
-                                setPriorityFilter(value);
-                                void loadPage(getWorkflowOrdersUrl(value));
-                            }}
-                            className={`${inputClass} sm:max-w-xs`}
-                            aria-label="تصفية حسب الأولوية"
-                        >
-                            <option value="">كل الأولويات</option>
-                            <option value="urgent">الطلبات العاجلة</option>
-                            <option value="normal">الطلبات العادية</option>
-                        </select>
-                    )}
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                    <div
+                        className={`flex min-w-0 flex-1 flex-col gap-3 ${
+                            section === 'orders'
+                                ? 'sm:grid sm:grid-cols-2 lg:grid-cols-3'
+                                : 'sm:flex-row sm:items-center'
+                        }`}
+                    >
+                        <div className="relative min-w-0 flex-1">
+                            <label
+                                htmlFor="workflow-search"
+                                className="sr-only"
+                            >
+                                {section === 'samples'
+                                    ? 'البحث في العينات'
+                                    : `بحث في ${titles[section]}`}
+                            </label>
+                            <svg
+                                aria-hidden="true"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-slate-400"
+                            >
+                                <circle cx="11" cy="11" r="7" />
+                                <path d="m20 20-4-4" />
+                            </svg>
+                            <input
+                                id="workflow-search"
+                                value={query}
+                                onChange={(event) =>
+                                    setQuery(event.target.value)
+                                }
+                                onKeyDown={(event) => {
+                                    if (
+                                        section === 'orders' &&
+                                        event.key === 'Enter'
+                                    ) {
+                                        event.preventDefault();
+                                        applyOrderFilters();
+                                    }
+                                }}
+                                placeholder={
+                                    section === 'samples'
+                                        ? 'ابحث بالباركود أو المريض أو التحليل'
+                                        : `بحث في ${titles[section]}`
+                                }
+                                className={`${inputClass} pr-10 ${section === 'orders' ? '' : 'sm:max-w-md'}`}
+                            />
+                        </div>
+                        {section === 'samples' && (
+                            <select
+                                value={sampleStatusFilter}
+                                onChange={(event) =>
+                                    setSampleStatusFilter(event.target.value)
+                                }
+                                className={`${inputClass} sm:w-52`}
+                                aria-label="تصفية العينات حسب الحالة"
+                            >
+                                <option value="">جميع الحالات</option>
+                                <option value="pending_collection">
+                                    بانتظار الاستلام
+                                </option>
+                                <option value="collected">تم الاستلام</option>
+                            </select>
+                        )}
+                        {section === 'orders' && (
+                            <select
+                                value={priorityFilter}
+                                onChange={(event) =>
+                                    setPriorityFilter(event.target.value)
+                                }
+                                className={`${inputClass} sm:max-w-xs`}
+                                aria-label="تصفية حسب الأولوية"
+                            >
+                                <option value="">كل الأولويات</option>
+                                <option value="urgent">الطلبات العاجلة</option>
+                                <option value="normal">الطلبات العادية</option>
+                            </select>
+                        )}
+                        {section === 'orders' && (
+                            <>
+                                <select
+                                    value={branchFilter}
+                                    onChange={(event) =>
+                                        setBranchFilter(event.target.value)
+                                    }
+                                    className={inputClass}
+                                    aria-label="تصفية حسب الفرع"
+                                >
+                                    <option value="">كل الفروع</option>
+                                    {branches.map((branch) => (
+                                        <option
+                                            key={branch.id}
+                                            value={branch.id}
+                                        >
+                                            {branch.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={orderStatusFilter}
+                                    onChange={(event) =>
+                                        setOrderStatusFilter(event.target.value)
+                                    }
+                                    className={`${inputClass} sm:w-48`}
+                                    aria-label="تصفية حسب حالة الطلب"
+                                >
+                                    <option value="">كل الحالات</option>
+                                    <option value="registered">مسجل</option>
+                                    <option value="processing">
+                                        قيد التنفيذ
+                                    </option>
+                                    <option value="completed">مكتمل</option>
+                                    <option value="cancelled">ملغي</option>
+                                </select>
+                                <label className="grid gap-1 text-xs text-slate-500">
+                                    من تاريخ
+                                    <input
+                                        type="date"
+                                        value={dateFromFilter}
+                                        onChange={(event) =>
+                                            setDateFromFilter(
+                                                event.target.value,
+                                            )
+                                        }
+                                        className={inputClass}
+                                    />
+                                </label>
+                                <label className="grid gap-1 text-xs text-slate-500">
+                                    إلى تاريخ
+                                    <input
+                                        type="date"
+                                        value={dateToFilter}
+                                        min={dateFromFilter || undefined}
+                                        onChange={(event) =>
+                                            setDateToFilter(event.target.value)
+                                        }
+                                        className={inputClass}
+                                    />
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={applyOrderFilters}
+                                    className="hover:bg-brand-800 h-11 shrink-0 rounded-xl bg-brand-700 px-4 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+                                >
+                                    تطبيق الفلاتر
+                                </button>
+                                {(query ||
+                                    orderStatusFilter ||
+                                    priorityFilter ||
+                                    branchFilter ||
+                                    dateFromFilter ||
+                                    dateToFilter) && (
+                                    <button
+                                        type="button"
+                                        onClick={clearOrderFilters}
+                                        className="h-11 shrink-0 rounded-xl px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+                                    >
+                                        مسح الفلاتر
+                                    </button>
+                                )}
+                            </>
+                        )}
+                        {section === 'samples' &&
+                            (query || sampleStatusFilter) && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setQuery('');
+                                        setSampleStatusFilter('');
+                                    }}
+                                    className="h-11 shrink-0 rounded-xl px-3 text-sm font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-800"
+                                >
+                                    مسح التصفية
+                                </button>
+                            )}
+                    </div>
                     <span className="px-1 text-xs font-medium text-slate-500">
                         {page ? `إجمالي ${page.meta.total} سجل` : ''}
                     </span>
@@ -590,6 +889,7 @@ export function WorkflowSectionPage({
                     rows={filteredRows}
                     currentUserId={currentUserId}
                     query={query}
+                    onViewOrder={setOrderToView}
                     onEditUser={(user) => void openUserEditor(user)}
                     onCollectSample={(sampleId) => void collectSample(sampleId)}
                     onEditResult={openResultEditor}
@@ -597,6 +897,13 @@ export function WorkflowSectionPage({
                     onDownloadResultDocument={(resultId) =>
                         void downloadResultDocument(resultId)
                     }
+                />
+            )}
+
+            {orderToView && (
+                <OrderDetailsDialog
+                    order={orderToView}
+                    onClose={() => setOrderToView(null)}
                 />
             )}
 
@@ -633,6 +940,7 @@ export function WorkflowSectionPage({
                     editor={editor}
                     branches={branches}
                     patients={patients}
+                    onSearchPatients={searchPatients}
                     tests={tests}
                     errors={errors}
                     busy={busy}
@@ -642,14 +950,20 @@ export function WorkflowSectionPage({
                             ? (documentPreview?.url ?? null)
                             : null
                     }
+                    documentPreviewType={
+                        editor.kind === 'result' &&
+                        documentPreview?.resultId === editor.resultId
+                            ? (documentPreview?.type ?? '')
+                            : ''
+                    }
                     documentError={documentError}
                     previewingDocument={
                         editor.kind === 'result' &&
                         previewingDocumentId === editor.resultId
                     }
                     onChange={updateValue}
-                    onPdfChange={updateResultPdf}
-                    onRemovePdfChange={toggleResultPdfRemoval}
+                    onDocumentChange={updateResultDocument}
+                    onRemoveDocumentChange={toggleResultDocumentRemoval}
                     onPreviewDocument={previewResultDocument}
                     onClose={() => {
                         setEditor(null);

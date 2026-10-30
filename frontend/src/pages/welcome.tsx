@@ -1,5 +1,5 @@
 import type { FormEvent, InputHTMLAttributes, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { PortalRouter } from '@/app/router';
 import {
@@ -21,6 +21,7 @@ import {
     fetchBranches,
     fetchDashboardSummary,
     fetchPatients,
+    fetchRealtimeBranchIds,
     fetchTests,
     saveBranch,
     savePatient,
@@ -47,6 +48,16 @@ import {
 } from '@/modules/doctors/pages/DoctorPortalPage';
 import { DoctorManagementPage } from '@/modules/doctors/pages/DoctorManagementPage';
 import { ReferralDiscountRulesPage } from '@/modules/referral-discounts/pages/ReferralDiscountRulesPage';
+import {
+    claimOrderNotification,
+    createOrderEcho,
+    getOrderNotifications,
+    isDoctorReferralCreatedPayload,
+    markOrderNotificationsAsRead,
+    rememberDoctorReferralNotification,
+    type RealtimeConnectionStatus,
+    type StoredDoctorReferralNotification,
+} from '@/modules/laboratory/services/orderRealtime';
 
 type Section = PortalSection;
 type User = AuthUser;
@@ -60,6 +71,7 @@ type IconName =
     | 'arrow-left'
     | 'arrow-right'
     | 'beaker'
+    | 'bell'
     | 'branch'
     | 'check'
     | 'chevron-down'
@@ -130,6 +142,12 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
                 <path d="M9 3h6" />
                 <path d="M10 3v7l-5.3 8.2A2.5 2.5 0 0 0 6.8 22h10.4a2.5 2.5 0 0 0 2.1-3.8L14 10V3" />
                 <path d="M8 16h8" />
+            </>
+        ),
+        bell: (
+            <>
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
             </>
         ),
         branch: (
@@ -319,6 +337,10 @@ function WelcomePage() {
     const [showDemoCredentials, setShowDemoCredentials] = useState(false);
     const [busy, setBusy] = useState(false);
     const section = getPortalSection(location.pathname) ?? 'overview';
+    const initialOrderSearch =
+        section === 'orders'
+            ? (new URLSearchParams(location.search).get('order') ?? undefined)
+            : undefined;
     const [patients, setPatients] = useState<ApiPage<Patient> | null>(null);
     const [tests, setTests] = useState<ApiPage<LabTest> | null>(null);
     const [branches, setBranches] = useState<ApiPage<Branch> | null>(null);
@@ -333,11 +355,361 @@ function WelcomePage() {
     );
     const [notice, setNotice] = useState('');
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [orderNotifications, setOrderNotifications] = useState<
+        StoredDoctorReferralNotification[]
+    >([]);
+    const [orderNotificationsOpen, setOrderNotificationsOpen] = useState(false);
+    const [orderRealtimeRevision, setOrderRealtimeRevision] = useState(0);
+    const [realtimeStatus, setRealtimeStatus] =
+        useState<RealtimeConnectionStatus>('disconnected');
+    const [soundNotificationsEnabled, setSoundNotificationsEnabled] =
+        useState(false);
+    const soundNotificationsEnabledRef = useRef(false);
+    const echoRef = useRef<ReturnType<typeof createOrderEcho> | null>(null);
+    const seenOrderIdsRef = useRef(new Set<number>());
+    const audioContextRef = useRef<AudioContext | null>(null);
 
     const canManagePatients =
         user?.role === 'lab_staff' || user?.role === 'lab_admin';
     const canManageBranches = user?.role === 'lab_admin';
     const canManageUsers = user?.role === 'lab_admin';
+    const unreadOrderNotificationCount = orderNotifications.filter(
+        (notification) => !notification.isRead,
+    ).length;
+
+    soundNotificationsEnabledRef.current = soundNotificationsEnabled;
+
+    const handleDoctorReferralCreated = useCallback(
+        async (payload: unknown, subscribedBranchId: number) => {
+            if (
+                !isDoctorReferralCreatedPayload(payload) ||
+                payload.branch_id !== subscribedBranchId ||
+                seenOrderIdsRef.current.has(payload.order_id)
+            ) {
+                return;
+            }
+
+            seenOrderIdsRef.current.add(payload.order_id);
+            setOrderRealtimeRevision((revision) => revision + 1);
+
+            if (user?.id) {
+                try {
+                    setOrderNotifications(
+                        await rememberDoctorReferralNotification(
+                            user.id,
+                            payload,
+                        ),
+                    );
+                } catch (storageError) {
+                    console.error(
+                        'Unable to save the doctor referral notification.',
+                        storageError,
+                    );
+                    setNotice(
+                        'وصلت إحالة جديدة، لكن تعذّر حفظها في قائمة الإشعارات.',
+                    );
+                }
+            }
+
+            try {
+                if (!(await claimOrderNotification(payload.order_id))) {
+                    return;
+                }
+            } catch (notificationError) {
+                console.error(
+                    'Unable to deduplicate a doctor referral notification across tabs.',
+                    notificationError,
+                );
+            }
+
+            const message = `إحالة جديدة للمعمل برقم ${payload.order_number}.`;
+            const audioContext = audioContextRef.current;
+
+            if (
+                soundNotificationsEnabledRef.current &&
+                audioContext?.state === 'running'
+            ) {
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const soundStart = audioContext.currentTime;
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, soundStart);
+                gain.gain.setValueAtTime(0.08, soundStart);
+                gain.gain.exponentialRampToValueAtTime(0.001, soundStart + 0.2);
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                oscillator.start(soundStart);
+                oscillator.stop(soundStart + 0.2);
+                setNotice(message);
+            } else if (soundNotificationsEnabledRef.current) {
+                setNotice(
+                    `${message} اضغط «تفعيل الصوت» للسماح بالتنبيه الصوتي.`,
+                );
+            } else {
+                setNotice(message);
+            }
+        },
+        [user?.id],
+    );
+
+    useEffect(() => {
+        if (!user || (user.role !== 'lab_admin' && user.role !== 'lab_staff')) {
+            setOrderNotifications([]);
+            setOrderNotificationsOpen(false);
+
+            return;
+        }
+
+        const userId = user.id;
+        const storageKey = `lab-doctor-referral-notifications:${userId}`;
+
+        try {
+            setOrderNotifications(getOrderNotifications(userId));
+        } catch (storageError) {
+            console.error(
+                'Unable to read doctor referral notifications.',
+                storageError,
+            );
+            setNotice('تعذّر تحميل قائمة الإشعارات المحفوظة.');
+        }
+
+        function synchronizeNotifications(event: StorageEvent) {
+            if (event.key !== storageKey) {
+                return;
+            }
+
+            try {
+                setOrderNotifications(getOrderNotifications(userId));
+            } catch (storageError) {
+                console.error(
+                    'Unable to synchronize doctor referral notifications.',
+                    storageError,
+                );
+                setNotice('تعذّر تحديث قائمة الإشعارات بين نوافذ المتصفح.');
+            }
+        }
+
+        window.addEventListener('storage', synchronizeNotifications);
+
+        return () => {
+            window.removeEventListener('storage', synchronizeNotifications);
+        };
+    }, [user]);
+
+    useEffect(() => {
+        if (!orderNotificationsOpen) {
+            return;
+        }
+
+        function closeOnEscape(event: KeyboardEvent) {
+            if (event.key === 'Escape') {
+                setOrderNotificationsOpen(false);
+            }
+        }
+
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [orderNotificationsOpen]);
+
+    useEffect(() => {
+        try {
+            const soundEnabled =
+                window.localStorage.getItem('lab-order-sound-enabled') ===
+                'true';
+            soundNotificationsEnabledRef.current = soundEnabled;
+            setSoundNotificationsEnabled(soundEnabled);
+        } catch (storageError) {
+            console.error(
+                'Unable to read the sound notification preference.',
+                storageError,
+            );
+        }
+
+        const syncSoundPreference = (event: StorageEvent) => {
+            if (event.key !== 'lab-order-sound-enabled') {
+                return;
+            }
+
+            const soundEnabled = event.newValue === 'true';
+            soundNotificationsEnabledRef.current = soundEnabled;
+            setSoundNotificationsEnabled(soundEnabled);
+        };
+
+        window.addEventListener('storage', syncSoundPreference);
+
+        return () => {
+            window.removeEventListener('storage', syncSoundPreference);
+        };
+    }, []);
+
+    useEffect(() => {
+        const authenticatedToken = token ?? '';
+
+        if (
+            !authenticatedToken ||
+            (user?.role !== 'lab_admin' && user?.role !== 'lab_staff')
+        ) {
+            setRealtimeStatus('disconnected');
+            return;
+        }
+
+        let cancelled = false;
+        let hasConnected = false;
+        let unsubscribeFromConnection: (() => void) | undefined;
+
+        async function connectToOrderNotifications() {
+            const branchIds = await fetchRealtimeBranchIds(authenticatedToken);
+
+            if (cancelled) {
+                return;
+            }
+
+            const echo = createOrderEcho(authenticatedToken);
+            echoRef.current = echo;
+            unsubscribeFromConnection = echo.connector.onConnectionChange(
+                (status) => {
+                    setRealtimeStatus(status);
+
+                    if (status !== 'connected') {
+                        return;
+                    }
+
+                    if (hasConnected) {
+                        setOrderRealtimeRevision((revision) => revision + 1);
+                    } else {
+                        hasConnected = true;
+                    }
+                },
+            );
+
+            for (const branchId of branchIds) {
+                echo.private(`branches.${branchId}.orders`).listen(
+                    '.doctor.referral.created',
+                    (payload: unknown) => {
+                        void handleDoctorReferralCreated(payload, branchId);
+                    },
+                );
+            }
+
+            setOrderRealtimeRevision((revision) => revision + 1);
+        }
+
+        void connectToOrderNotifications().catch((connectionError) => {
+            if (cancelled) {
+                return;
+            }
+
+            console.error(
+                'Unable to initialize laboratory order notifications.',
+                connectionError,
+            );
+            setRealtimeStatus('failed');
+            setNotice(
+                'تعذّر تهيئة التنبيهات المباشرة. ستظل الطلبات محفوظة ويمكن مراجعتها من شاشة الطلبات.',
+            );
+        });
+
+        return () => {
+            cancelled = true;
+            unsubscribeFromConnection?.();
+            echoRef.current?.leaveAllChannels();
+            echoRef.current?.disconnect();
+            echoRef.current = null;
+        };
+    }, [handleDoctorReferralCreated, token, user?.role]);
+
+    function toggleOrderNotifications() {
+        if (orderNotificationsOpen) {
+            setOrderNotificationsOpen(false);
+
+            return;
+        }
+
+        setOrderNotificationsOpen(true);
+
+        if (!user || (user.role !== 'lab_admin' && user.role !== 'lab_staff')) {
+            return;
+        }
+
+        void markOrderNotificationsAsRead(user.id).then(
+            setOrderNotifications,
+            (storageError: unknown) => {
+                console.error(
+                    'Unable to mark doctor referral notifications as read.',
+                    storageError,
+                );
+                setNotice('تعذّر تحديث حالة قراءة الإشعارات.');
+            },
+        );
+    }
+
+    function openOrderNotification(
+        notification: StoredDoctorReferralNotification,
+    ) {
+        setOrderNotificationsOpen(false);
+        void navigate(
+            `${getPortalPath('orders')}?order=${encodeURIComponent(notification.order_number)}`,
+        );
+    }
+
+    function toggleSoundNotifications() {
+        const enable = !soundNotificationsEnabledRef.current;
+        soundNotificationsEnabledRef.current = enable;
+        setSoundNotificationsEnabled(enable);
+
+        try {
+            window.localStorage.setItem(
+                'lab-order-sound-enabled',
+                String(enable),
+            );
+        } catch (storageError) {
+            console.error(
+                'Unable to save the sound notification preference.',
+                storageError,
+            );
+            setNotice('تعذّر حفظ إعداد صوت التنبيهات على هذا المتصفح.');
+        }
+
+        if (!enable) {
+            if (audioContextRef.current?.state === 'running') {
+                void audioContextRef.current.suspend().catch((audioError) => {
+                    console.error(
+                        'Unable to suspend the notification sound.',
+                        audioError,
+                    );
+                });
+            }
+            setNotice('تم إيقاف صوت التنبيهات.');
+            return;
+        }
+
+        try {
+            audioContextRef.current ??= new window.AudioContext();
+            void audioContextRef.current.resume().then(
+                () => setNotice('تم تفعيل صوت التنبيهات.'),
+                (audioError: unknown) => {
+                    console.error(
+                        'The browser blocked notification audio.',
+                        audioError,
+                    );
+                    setNotice(
+                        'المتصفح لم يسمح بالصوت بعد. اضغط تفعيل الصوت مرة أخرى.',
+                    );
+                },
+            );
+        } catch (audioError) {
+            console.error(
+                'Unable to initialize notification audio.',
+                audioError,
+            );
+            setNotice('هذا المتصفح لا يدعم صوت التنبيهات.');
+        }
+    }
+
     const navItems = useMemo(
         () => [
             {
@@ -1017,22 +1389,22 @@ function WelcomePage() {
                     />
                 )}
                 <aside
-                    className={`fixed inset-y-0 right-0 z-40 flex w-[272px] flex-col border-l border-white/10 bg-[#123a36] text-white shadow-2xl shadow-slate-950/10 transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                    className={`fixed inset-y-0 right-0 z-40 flex w-[272px] flex-col border-l border-slate-200 bg-white text-slate-700 shadow-xl shadow-slate-950/5 transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
                 >
-                    <div className="flex h-[82px] items-center gap-3 border-b border-white/10 px-6">
-                        <span className="grid size-11 place-items-center rounded-[1rem] bg-emerald-300/15 text-emerald-200 ring-1 ring-white/10">
+                    <div className="flex h-[72px] items-center gap-3 border-b border-slate-100 px-6">
+                        <span className="grid size-10 place-items-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-700/15">
                             <Icon name="flask" size={21} />
                         </span>
                         <div>
-                            <p className="font-bold text-white">معمل</p>
-                            <p className="text-[11px] text-emerald-100/55">
+                            <p className="font-bold text-slate-900">معمل</p>
+                            <p className="text-[11px] text-slate-500">
                                 إدارة المختبر
                             </p>
                         </div>
                     </div>
 
                     <div className="grid gap-1.5 px-4 py-7">
-                        <p className="px-3 pb-3 text-[10px] font-bold tracking-widest text-emerald-100/45">
+                        <p className="px-3 pb-3 text-[10px] font-bold tracking-widest text-slate-400">
                             القائمة الرئيسية
                         </p>
                         {navItems.map((item) => (
@@ -1044,40 +1416,54 @@ function WelcomePage() {
                                     setLoadError('');
                                     setMobileMenuOpen(false);
                                 }}
-                                className={`group flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${section === item.id ? 'bg-emerald-300/15 text-emerald-100 ring-1 ring-emerald-100/10' : 'text-emerald-50/65 hover:bg-white/[0.06] hover:text-white'}`}
+                                aria-current={
+                                    section === item.id ? 'page' : undefined
+                                }
+                                className={`group flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${section === item.id ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                             >
                                 <span
-                                    className={`grid size-8 place-items-center rounded-lg transition ${section === item.id ? 'bg-emerald-200/10 text-emerald-200' : 'text-emerald-100/55 group-hover:text-white'}`}
+                                    className={`grid size-8 place-items-center rounded-lg transition ${section === item.id ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-400 group-hover:text-slate-600'}`}
                                 >
                                     <Icon name={item.icon} size={17} />
                                 </span>
                                 <span>{item.label}</span>
+                                {item.id === 'orders' &&
+                                    unreadOrderNotificationCount > 0 && (
+                                        <span
+                                            aria-label={`${unreadOrderNotificationCount} طلب جديد`}
+                                            className="mr-auto min-w-5 rounded-full bg-rose-600 px-1.5 py-0.5 text-center text-[10px] font-bold text-white"
+                                        >
+                                            {unreadOrderNotificationCount > 99
+                                                ? '99+'
+                                                : unreadOrderNotificationCount}
+                                        </span>
+                                    )}
                                 {section === item.id && (
-                                    <span className="mr-auto size-1.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.8)]" />
+                                    <span className="mr-auto size-1.5 rounded-full bg-brand-500" />
                                 )}
                             </Link>
                         ))}
                     </div>
 
-                    <div className="mt-auto grid gap-3 border-t border-white/10 p-4">
-                        <div className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.05] p-3">
-                            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-200/10 text-sm font-bold text-emerald-100 ring-1 ring-white/10">
+                    <div className="mt-auto grid gap-3 border-t border-slate-100 p-4">
+                        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-sm font-bold text-brand-700">
                                 {displayName.slice(0, 1)}
                             </span>
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-semibold text-white">
+                                <p className="truncate text-sm font-semibold text-slate-900">
                                     {user.name}
                                 </p>
-                                <p className="text-xs text-emerald-100/55">
+                                <p className="text-xs text-slate-500">
                                     {roleLabels[user.role]}
                                 </p>
                             </div>
-                            <span className="size-2 rounded-full bg-emerald-300" />
+                            <span className="size-2 rounded-full bg-emerald-500" />
                         </div>
                         <button
                             type="button"
                             onClick={() => void handleLogout()}
-                            className="flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-emerald-50/60 transition hover:bg-rose-400/10 hover:text-rose-200"
+                            className="flex h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"
                         >
                             <Icon name="logout" size={17} />
                             تسجيل الخروج
@@ -1086,7 +1472,7 @@ function WelcomePage() {
                 </aside>
 
                 <div className="min-h-screen lg:mr-[272px]">
-                    <header className="sticky top-0 z-20 flex h-[82px] items-center justify-between border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur-xl sm:px-7 lg:px-10">
+                    <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-slate-200/70 bg-white/95 px-4 backdrop-blur-xl sm:px-7 lg:px-10">
                         <div className="flex items-center gap-3">
                             <button
                                 type="button"
@@ -1106,17 +1492,199 @@ function WelcomePage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="hidden items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 sm:inline-flex">
-                                <span className="size-1.5 rounded-full bg-emerald-500" />
-                                اتصال آمن
-                            </span>
-                            <span className="grid size-10 place-items-center rounded-2xl bg-brand-700 font-bold text-white shadow-md shadow-brand-700/15">
+                            {canManagePatients && (
+                                <>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            aria-label={`الإشعارات${unreadOrderNotificationCount > 0 ? `، ${unreadOrderNotificationCount} غير مقروء` : ''}`}
+                                            aria-expanded={
+                                                orderNotificationsOpen
+                                            }
+                                            aria-controls="doctor-referral-notifications"
+                                            onClick={toggleOrderNotifications}
+                                            className="hover:border-brand-200 relative grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-700"
+                                        >
+                                            <Icon name="bell" size={19} />
+                                            {unreadOrderNotificationCount >
+                                                0 && (
+                                                <span className="absolute -top-1.5 -right-1.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[10px] leading-none font-bold text-white">
+                                                    {unreadOrderNotificationCount >
+                                                    99
+                                                        ? '99+'
+                                                        : unreadOrderNotificationCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                        {orderNotificationsOpen && (
+                                            <section
+                                                id="doctor-referral-notifications"
+                                                aria-label="إشعارات إحالات الأطباء"
+                                                className="absolute left-0 z-30 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-950/10"
+                                            >
+                                                <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+                                                    <div>
+                                                        <h2 className="text-sm font-bold text-slate-900">
+                                                            إحالات جديدة
+                                                        </h2>
+                                                        <p className="mt-0.5 text-xs text-slate-500">
+                                                            {
+                                                                orderNotifications.length
+                                                            }{' '}
+                                                            إشعار محفوظ
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setOrderNotificationsOpen(
+                                                                false,
+                                                            )
+                                                        }
+                                                        className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100"
+                                                    >
+                                                        إغلاق
+                                                    </button>
+                                                </header>
+                                                {orderNotifications.length >
+                                                0 ? (
+                                                    <ul className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+                                                        {orderNotifications.map(
+                                                            (notification) => (
+                                                                <li
+                                                                    key={
+                                                                        notification.order_id
+                                                                    }
+                                                                >
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            openOrderNotification(
+                                                                                notification,
+                                                                            )
+                                                                        }
+                                                                        className="flex w-full items-start gap-3 px-4 py-3 text-right transition hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none"
+                                                                    >
+                                                                        <span
+                                                                            className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                                                                                notification.isRead
+                                                                                    ? 'bg-slate-300'
+                                                                                    : 'bg-rose-500'
+                                                                            }`}
+                                                                        />
+                                                                        <span className="min-w-0 flex-1">
+                                                                            <span className="block text-sm font-semibold text-slate-800">
+                                                                                إحالة
+                                                                                جديدة
+                                                                                من
+                                                                                الطبيب
+                                                                            </span>
+                                                                            <span className="mt-0.5 block text-xs text-slate-600">
+                                                                                رقم
+                                                                                الطلب:{' '}
+                                                                                <bdi dir="ltr">
+                                                                                    {
+                                                                                        notification.order_number
+                                                                                    }
+                                                                                </bdi>
+                                                                            </span>
+                                                                            <time
+                                                                                dateTime={
+                                                                                    notification.created_at
+                                                                                }
+                                                                                className="mt-1 block text-[11px] text-slate-400"
+                                                                            >
+                                                                                {new Date(
+                                                                                    notification.created_at,
+                                                                                ).toLocaleString(
+                                                                                    'ar-EG',
+                                                                                )}
+                                                                            </time>
+                                                                        </span>
+                                                                    </button>
+                                                                </li>
+                                                            ),
+                                                        )}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="px-4 py-8 text-center text-sm text-slate-500">
+                                                        لا توجد إحالات جديدة حتى
+                                                        الآن.
+                                                    </p>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setOrderNotificationsOpen(
+                                                            false,
+                                                        );
+                                                        void navigate(
+                                                            getPortalPath(
+                                                                'orders',
+                                                            ),
+                                                        );
+                                                    }}
+                                                    className="w-full border-t border-slate-100 px-4 py-3 text-sm font-semibold text-brand-700 transition hover:bg-brand-50"
+                                                >
+                                                    عرض كل الطلبات
+                                                </button>
+                                            </section>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        aria-pressed={soundNotificationsEnabled}
+                                        aria-label={
+                                            soundNotificationsEnabled
+                                                ? 'إيقاف صوت التنبيه'
+                                                : 'تفعيل صوت التنبيه'
+                                        }
+                                        onClick={toggleSoundNotifications}
+                                        className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-3"
+                                    >
+                                        <span className="sm:hidden">
+                                            {soundNotificationsEnabled
+                                                ? 'الصوت يعمل'
+                                                : 'تفعيل الصوت'}
+                                        </span>
+                                        <span className="hidden sm:inline">
+                                            {soundNotificationsEnabled
+                                                ? 'إيقاف صوت التنبيه'
+                                                : 'تفعيل صوت التنبيه'}
+                                        </span>
+                                    </button>
+                                    <span
+                                        role="status"
+                                        className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium sm:inline-flex ${
+                                            realtimeStatus === 'connected'
+                                                ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                                                : 'border-amber-200 bg-amber-50 text-amber-800'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`size-1.5 rounded-full ${
+                                                realtimeStatus === 'connected'
+                                                    ? 'bg-emerald-500'
+                                                    : 'bg-amber-500'
+                                            }`}
+                                        />
+                                        {realtimeStatus === 'connected'
+                                            ? 'التنبيهات المباشرة متصلة'
+                                            : realtimeStatus === 'connecting' ||
+                                                realtimeStatus ===
+                                                    'reconnecting'
+                                              ? 'جاري الاتصال بالتنبيهات'
+                                              : 'التنبيهات غير متصلة'}
+                                    </span>
+                                </>
+                            )}
+                            <span className="grid size-10 place-items-center rounded-xl bg-brand-700 font-bold text-white shadow-sm shadow-brand-700/15">
                                 {displayName.slice(0, 1)}
                             </span>
                         </div>
                     </header>
 
-                    <main className="mx-auto max-w-[1600px] px-4 py-7 sm:px-7 sm:py-9 lg:px-10">
+                    <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-7 sm:py-8 lg:px-10">
                         {notice && (
                             <div className="mb-5 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                                 <span className="flex items-center gap-2">
@@ -1175,6 +1743,8 @@ function WelcomePage() {
                                 role={user.role}
                                 currentUserId={user.id}
                                 onNotice={setNotice}
+                                orderRealtimeRevision={orderRealtimeRevision}
+                                initialOrderSearch={initialOrderSearch}
                             />
                         ) : (
                             <section className="grid gap-5">
@@ -1218,7 +1788,7 @@ function WelcomePage() {
                                     )}
                                 </div>
 
-                                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:flex-row sm:items-center sm:justify-between">
                                     <div className="relative w-full sm:max-w-sm">
                                         <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-slate-400">
                                             <Icon name="search" size={17} />
@@ -1509,27 +2079,22 @@ function Overview({
     ];
 
     return (
-        <div className="grid gap-8">
-            <section className="relative isolate overflow-hidden rounded-[1.75rem] bg-[#123e39] px-6 py-8 text-white shadow-[0_22px_55px_-36px_rgba(12,68,57,0.65)] sm:px-9 sm:py-9">
-                <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_82%_15%,rgba(90,190,157,0.24),transparent_30%),linear-gradient(112deg,rgba(13,55,50,0.12),rgba(17,89,75,0.56))]" />
-                <div className="absolute -top-28 -left-12 -z-10 size-72 rounded-full border border-white/[0.07]" />
-                <div className="absolute -top-18 -left-2 -z-10 size-52 rounded-full border border-white/[0.07]" />
-                <div className="relative flex flex-col justify-between gap-7 sm:flex-row sm:items-center">
+        <div className="grid gap-7">
+            <section className="rounded-2xl border border-slate-200 bg-white px-5 py-6 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:px-7 sm:py-7">
+                <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
                     <div className="grid max-w-xl gap-3">
-                        <div className="flex items-center gap-2">
-                            <span className="size-2 rounded-full bg-emerald-300 shadow-[0_0_14px_rgba(110,231,183,0.7)]" />
-                            <span className="text-xs font-semibold tracking-wide text-emerald-100/80">
-                                {roleLabels[user.role]} · مساحة العمل
-                            </span>
+                        <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                            <span className="size-1.5 rounded-full bg-brand-500" />
+                            <span>{roleLabels[user.role]} · مساحة العمل</span>
                         </div>
-                        <h2 className="text-2xl leading-[1.5] font-bold sm:text-3xl">
+                        <h2 className="text-2xl leading-[1.5] font-bold text-ink-950 sm:text-[1.7rem]">
                             {canManagePatients
                                 ? 'مساحة عملك جاهزة.'
                                 : user.role === 'doctor'
                                   ? 'تابع إحالاتك ونتائج مرضاك.'
                                   : 'مرحباً بك في بوابة المختبر.'}
                         </h2>
-                        <p className="max-w-2xl text-sm leading-7 text-white/70">
+                        <p className="max-w-2xl text-sm leading-7 text-slate-500">
                             {canManagePatients
                                 ? 'تابع بيانات المرضى والفروع وكتالوج التحاليل من مكان واحد. الأرقام هنا مبنية على سجلات النظام الفعلية.'
                                 : user.role === 'patient'
@@ -1537,16 +2102,16 @@ function Overview({
                                   : 'استعرض كتالوج التحاليل المتاحة للمختبر.'}
                         </p>
                     </div>
-                    <div className="hidden shrink-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.07] px-4 py-3 sm:flex">
-                        <span className="grid size-11 place-items-center rounded-xl bg-emerald-200/10 text-emerald-100">
+                    <div className="hidden shrink-0 items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 sm:flex">
+                        <span className="grid size-10 place-items-center rounded-xl bg-white text-brand-700">
                             <Icon name="activity" size={23} />
                         </span>
                         <span className="grid gap-1">
-                            <span className="text-xs text-white/55">
+                            <span className="text-xs text-slate-500">
                                 حالة النظام
                             </span>
-                            <span className="flex items-center gap-2 text-sm font-semibold text-white">
-                                <span className="size-1.5 rounded-full bg-emerald-300" />
+                            <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                                <span className="size-1.5 rounded-full bg-emerald-500" />
                                 متصل
                             </span>
                         </span>
@@ -1576,7 +2141,7 @@ function Overview({
                             key={card.label}
                             type="button"
                             onClick={() => onNavigate(card.section)}
-                            className="group relative grid gap-5 overflow-hidden rounded-2xl border border-slate-200/70 bg-white/90 p-5 text-right shadow-[0_8px_24px_-22px_rgba(20,54,49,0.45)] transition duration-200 hover:-translate-y-1 hover:border-brand-100 hover:bg-white hover:shadow-[0_20px_40px_-28px_rgba(20,54,49,0.35)]"
+                            className="group relative grid gap-5 overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 text-right shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] transition duration-200 hover:border-brand-100 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
                         >
                             <div className="flex items-center justify-between">
                                 <span
@@ -1606,7 +2171,7 @@ function Overview({
             </section>
 
             <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-                <div className="rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.45)] sm:p-6">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:p-6">
                     <div className="mb-5 flex items-center justify-between">
                         <div>
                             <h3 className="font-bold text-slate-900">
@@ -1677,7 +2242,7 @@ function Overview({
                         )}
                     </div>
                 </div>
-                <div className="grid content-start gap-4 rounded-2xl border border-slate-200/70 bg-white/90 p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.45)] sm:p-6">
+                <div className="grid content-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:p-6">
                     <div className="grid size-10 place-items-center rounded-xl bg-brand-50 text-brand-700">
                         <Icon name="shield" size={19} />
                     </div>
@@ -1744,10 +2309,13 @@ function TableShell({ children }: { children: ReactNode }) {
 
 function TableHead({ labels }: { labels: string[] }) {
     return (
-        <thead className="bg-slate-50/80 text-xs font-semibold text-slate-500">
+        <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
             <tr>
                 {labels.map((label) => (
-                    <th key={label} className="px-5 py-4">
+                    <th
+                        key={label}
+                        className="border-b border-slate-200 px-5 py-4"
+                    >
                         {label}
                     </th>
                 ))}
@@ -1776,11 +2344,11 @@ function PatientTable({
                     '',
                 ]}
             />
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 [&_tr]:transition-colors [&_tr:hover]:bg-brand-50/40">
                 {rows.map((patient) => (
                     <tr
                         key={patient.id}
-                        className="transition hover:bg-slate-50/70"
+                        className="transition hover:bg-brand-50/40"
                     >
                         <td className="px-5 py-4 font-semibold text-slate-800">
                             {patient.full_name}
@@ -1827,11 +2395,11 @@ function TestTable({
                     '',
                 ]}
             />
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 [&_tr]:transition-colors [&_tr:hover]:bg-brand-50/40">
                 {rows.map((test) => (
                     <tr
                         key={test.id}
-                        className="transition hover:bg-slate-50/70"
+                        className="transition hover:bg-brand-50/40"
                     >
                         <td className="px-5 py-4 font-semibold text-slate-800">
                             {test.name}
@@ -1891,11 +2459,11 @@ function BranchTable({
                     '',
                 ]}
             />
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 [&_tr]:transition-colors [&_tr:hover]:bg-brand-50/40">
                 {rows.map((branch) => (
                     <tr
                         key={branch.id}
-                        className="transition hover:bg-slate-50/70"
+                        className="transition hover:bg-brand-50/40"
                     >
                         <td className="px-5 py-4 font-semibold text-slate-800">
                             {branch.name}
@@ -2015,9 +2583,9 @@ function EditorDialog({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="editor-title"
-                className="my-auto w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"
+                className="my-auto w-full max-w-xl overflow-hidden rounded-2xl border border-white/70 bg-white shadow-[0_35px_100px_-35px_rgba(4,28,25,0.5)]"
             >
-                <header className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+                <header className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4 sm:px-6 sm:py-5">
                     <div>
                         <h2
                             id="editor-title"
@@ -2034,12 +2602,12 @@ function EditorDialog({
                         aria-label="إغلاق"
                         disabled={busy}
                         onClick={onClose}
-                        className="grid size-9 place-items-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                        className="grid size-9 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
                     >
                         <Icon name="close" />
                     </button>
                 </header>
-                <form onSubmit={onSubmit} className="grid gap-5 p-6">
+                <form onSubmit={onSubmit} className="grid gap-5 p-4 sm:p-6">
                     {editor.kind === 'patient' ? (
                         <div className="grid gap-4 sm:grid-cols-2">
                             {input('full_name', 'الاسم بالكامل', {

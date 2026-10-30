@@ -26,6 +26,20 @@ class Order extends Model
     /** @use HasFactory<OrderFactory> */
     use HasFactory;
 
+    public function displayNumber(): string
+    {
+        return 'LAB-'.str_pad((string) $this->getKey(), 6, '0', STR_PAD_LEFT);
+    }
+
+    public static function idFromDisplayNumber(string $number): ?int
+    {
+        if (preg_match('/^LAB-0*([1-9]\d*)$/i', $number, $matches) !== 1) {
+            return null;
+        }
+
+        return (int) $matches[1];
+    }
+
     protected $fillable = [
         'order_number',
         'branch_id',

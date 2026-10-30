@@ -8,17 +8,34 @@ use App\Http\Requests\Api\V1\UpdatePatientRequest;
 use App\Http\Resources\Api\V1\PatientResource;
 use App\Models\Patient;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
 class PatientController extends Controller
 {
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Patient::class);
+        $filters = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+        ]);
 
         return PatientResource::collection(
-            Patient::query()->orderBy('full_name')->orderBy('id')->paginate(25),
+            Patient::query()
+                ->when(
+                    isset($filters['search']) && $filters['search'] !== '',
+                    fn ($patients) => $patients->where(function ($patients) use ($filters): void {
+                        $search = $filters['search'];
+                        $patients
+                            ->where('full_name', 'like', '%'.$search.'%')
+                            ->orWhere('phone', 'like', '%'.$search.'%');
+                    }),
+                )
+                ->orderBy('full_name')
+                ->orderBy('id')
+                ->paginate(25)
+                ->withQueryString(),
         );
     }
 

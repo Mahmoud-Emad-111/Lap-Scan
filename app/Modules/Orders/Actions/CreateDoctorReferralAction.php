@@ -6,6 +6,7 @@ use App\Enums\DoctorVerificationStatus;
 use App\Enums\OrderPriority;
 use App\Enums\OrderSource;
 use App\Enums\UserRole;
+use App\Events\DoctorReferralCreated;
 use App\Models\Branch;
 use App\Models\Order;
 use App\Models\Patient;
@@ -26,6 +27,7 @@ class CreateDoctorReferralAction
      *     patient_gender?: string|null,
      *     branch_id: int,
      *     test_ids: list<int>,
+     *     apply_discount?: bool,
      *     priority: string,
      *     urgent_reason?: string|null,
      *     notes?: string|null
@@ -36,7 +38,7 @@ class CreateDoctorReferralAction
         User $doctor,
         CreateOrderAction $createOrder,
     ): Order {
-        return DB::transaction(function () use ($attributes, $doctor, $createOrder): Order {
+        $order = DB::transaction(function () use ($attributes, $doctor, $createOrder): Order {
             $profile = $doctor->doctorProfile()->lockForUpdate()->first();
 
             if (
@@ -80,8 +82,9 @@ class CreateDoctorReferralAction
                 ->where('patient_id', $patient->id)
                 ->where('source', OrderSource::Doctor->value)
                 ->exists();
+            $applyDiscount = $attributes['apply_discount'] ?? true;
 
-            return $createOrder->handle([
+            $order = $createOrder->handle([
                 'patient_id' => $patient->id,
                 'branch_id' => $branch->id,
                 'test_ids' => $attributes['test_ids'],
@@ -91,12 +94,22 @@ class CreateDoctorReferralAction
                 'priority' => OrderPriority::from($attributes['priority']),
                 'urgent_reason' => $attributes['urgent_reason'] ?? null,
                 'request_key' => $attributes['request_key'],
-            ], $doctor, [
-                'doctor' => $doctor,
-                'branch' => $branch,
-                'is_first_referral' => $isFirstReferral,
-            ]);
+            ], $doctor, $applyDiscount
+                ? [
+                    'doctor' => $doctor,
+                    'branch' => $branch,
+                    'is_first_referral' => $isFirstReferral,
+                ]
+                : null);
+
+            if ($order->wasRecentlyCreated) {
+                DoctorReferralCreated::dispatch($order);
+            }
+
+            return $order;
         });
+
+        return $order;
     }
 
     /**

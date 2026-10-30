@@ -22,7 +22,7 @@ class SampleResource extends JsonResource
             'specimen_type' => $this->specimen_type,
             'status' => $this->status->value,
             'collected_at' => $this->collected_at?->toISOString(),
-            'order_number' => $this->whenLoaded('orderItem', fn (): string => $this->orderItem->order->order_number),
+            'order_number' => $this->whenLoaded('orderItem', fn (): string => $this->orderItem->order->displayNumber()),
             'patient_name' => $this->whenLoaded('orderItem', fn (): string => $this->orderItem->order->patient->full_name),
             'test_name' => $this->whenLoaded('orderItem', fn (): string => $this->orderItem->test_name),
         ];

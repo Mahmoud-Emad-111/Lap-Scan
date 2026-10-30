@@ -231,14 +231,19 @@ export function DoctorManagementPage({
             )}
 
             {selectedDoctor && (
-                <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4">
+                <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-3 backdrop-blur-sm sm:p-4">
                     <form
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="doctor-review-title"
                         onSubmit={submitReview}
-                        className="grid w-full max-w-xl gap-4 rounded-2xl bg-white p-5 shadow-2xl sm:p-6"
+                        className="my-auto grid w-full max-w-xl gap-4 rounded-2xl border border-white/70 bg-white p-4 shadow-[0_35px_100px_-35px_rgba(4,28,25,0.5)] sm:p-6"
                     >
-                        <div>
+                        <div className="border-b border-slate-100 pb-4">
                             <h3 className="text-lg font-bold text-slate-900">
-                                مراجعة {selectedDoctor.name}
+                                <span id="doctor-review-title">
+                                    مراجعة {selectedDoctor.name}
+                                </span>
                             </h3>
                             <p className="mt-1 text-sm text-slate-500">
                                 الترخيص: {selectedDoctor.license_number} ·
@@ -254,7 +259,7 @@ export function DoctorManagementPage({
                                         event.target.value as ReviewStatus,
                                     )
                                 }
-                                className="h-11 rounded-xl border border-slate-200 px-3"
+                                className="h-11 rounded-xl border border-slate-200 bg-white px-3 transition outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70"
                             >
                                 <option value="verified">اعتماد</option>
                                 <option value="rejected">رفض</option>
@@ -276,7 +281,7 @@ export function DoctorManagementPage({
                                 }
                                 maxLength={2000}
                                 rows={4}
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm transition outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70"
                             />
                             {validationError && (
                                 <span className="text-xs font-normal text-rose-600">
@@ -284,12 +289,12 @@ export function DoctorManagementPage({
                                 </span>
                             )}
                         </label>
-                        <div className="flex flex-wrap justify-end gap-2">
+                        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
                             <button
                                 type="button"
                                 disabled={busy}
                                 onClick={() => setSelectedDoctor(null)}
-                                className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700"
+                                className="h-10 rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
                             >
                                 إلغاء
                             </button>

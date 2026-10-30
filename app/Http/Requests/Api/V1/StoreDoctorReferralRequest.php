@@ -28,6 +28,7 @@ class StoreDoctorReferralRequest extends FormRequest
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
             'test_ids' => ['required', 'array', 'min:1'],
             'test_ids.*' => ['required', 'integer', 'distinct', 'exists:tests,id'],
+            'apply_discount' => ['sometimes', 'boolean'],
             'priority' => ['required', Rule::enum(OrderPriority::class)],
             'urgent_reason' => ['required_if:priority,urgent', 'nullable', 'string', 'min:10', 'max:2000'],
             'notes' => ['nullable', 'string', 'max:2000'],

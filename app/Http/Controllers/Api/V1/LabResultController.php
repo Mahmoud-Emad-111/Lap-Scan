@@ -49,14 +49,19 @@ class LabResultController extends Controller
         Gate::authorize('view', $orderItem->order);
 
         $attributes = $request->validated();
-        unset($attributes['pdf'], $attributes['remove_pdf']);
+        unset(
+            $attributes['document'],
+            $attributes['pdf'],
+            $attributes['remove_document'],
+            $attributes['remove_pdf'],
+        );
 
         $result = $saveLabResult->handle(
             $orderItem,
             $attributes,
             $request->user(),
-            $request->file('pdf'),
-            $request->boolean('remove_pdf'),
+            $request->file('document') ?? $request->file('pdf'),
+            $request->boolean('remove_document') || $request->boolean('remove_pdf'),
         );
 
         return LabResultResource::make($result->load('orderItem.order.patient'))
@@ -71,11 +76,21 @@ class LabResultController extends Controller
         abort_if($result->document_path === null, 404);
         abort_unless(Storage::disk('local')->exists($result->document_path), 404);
 
+        $extension = strtolower(pathinfo((string) $result->document_name, PATHINFO_EXTENSION));
+        $mimeType = match ($extension) {
+            'pdf' => 'application/pdf',
+            'jpg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => null,
+        };
+        abort_if($mimeType === null, 404);
+
         return Storage::disk('local')->download(
             $result->document_path,
-            'lab-result-'.$result->id.'.pdf',
+            'lab-result-'.$result->id.'.'.$extension,
             [
-                'Content-Type' => 'application/pdf',
+                'Content-Type' => $mimeType,
                 'X-Content-Type-Options' => 'nosniff',
             ],
         );

@@ -90,6 +90,49 @@ it('stores, replaces, downloads, and removes a private PDF with a draft result',
     expect($result->refresh()->document_path)->toBeNull();
 });
 
+it('stores and downloads a private result image', function () {
+    $administrator = User::factory()->create();
+    $administrator->forceFill(['role' => UserRole::LabAdmin])->save();
+    $branch = Branch::factory()->create();
+    $patient = Patient::factory()->create();
+    $order = Order::factory()->for($branch)->for($patient)->create();
+    $orderItem = OrderItem::factory()->for($order)->create();
+    Sample::factory()->for($orderItem)->create([
+        'status' => SampleStatus::Collected,
+        'collected_by' => $administrator->id,
+        'collected_at' => now(),
+    ]);
+    Storage::fake('local');
+    Sanctum::actingAs($administrator);
+    $pngContent = base64_decode(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lWQAAAAASUVORK5CYII=',
+        true,
+    );
+
+    if (! is_string($pngContent)) {
+        throw new RuntimeException('Unable to decode the PNG fixture.');
+    }
+
+    $response = $this->post("/api/v1/order-items/{$orderItem->id}/result", [
+        'value' => 'Draft value',
+        'document' => UploadedFile::fake()->createWithContent('result.png', $pngContent),
+    ], ['Accept' => 'application/json']);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.has_document', true)
+        ->assertJsonPath('data.has_pdf', false)
+        ->assertJsonPath('data.document_type', 'image')
+        ->assertJsonPath('data.document_name', 'result.png');
+
+    $result = LabResult::query()->where('order_item_id', $orderItem->id)->firstOrFail();
+    Storage::disk('local')->assertExists($result->document_path);
+
+    $this->get("/api/v1/results/{$result->id}/document")
+        ->assertOk()
+        ->assertHeader('content-type', 'image/png')
+        ->assertHeader('content-disposition', 'attachment; filename=lab-result-'.$result->id.'.png');
+});
+
 it('rejects invalid PDFs and does not create a result', function () {
     $administrator = User::factory()->create();
     $administrator->forceFill(['role' => UserRole::LabAdmin])->save();
@@ -110,6 +153,12 @@ it('rejects invalid PDFs and does not create a result', function () {
         'pdf' => UploadedFile::fake()->create('report.txt', 10, 'text/plain'),
     ], ['Accept' => 'application/json'])->assertUnprocessable()
         ->assertJsonValidationErrors('pdf');
+
+    $this->post("/api/v1/order-items/{$orderItem->id}/result", [
+        'value' => 'Draft value',
+        'document' => UploadedFile::fake()->create('report.svg', 10, 'image/svg+xml'),
+    ], ['Accept' => 'application/json'])->assertUnprocessable()
+        ->assertJsonValidationErrors('document');
 
     $this->post("/api/v1/order-items/{$orderItem->id}/result", [
         'value' => 'Draft value',

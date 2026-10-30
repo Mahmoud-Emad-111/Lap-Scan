@@ -44,6 +44,22 @@ it('returns 422 when the patient email is invalid', function () {
     $this->assertDatabaseCount('patients', 0);
 });
 
+it('searches patients by phone beyond the first page', function () {
+    $staff = User::factory()->create();
+    $staff->forceFill(['role' => UserRole::LabStaff])->save();
+    Patient::factory()->count(25)->create();
+    $patient = Patient::factory()->create([
+        'full_name' => 'مريم حسن',
+        'phone' => '01012345678',
+    ]);
+    Sanctum::actingAs($staff);
+
+    $this->getJson('/api/v1/patients?search=01012345678')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $patient->id);
+});
+
 it('does not let a patient read another patient profile', function () {
     $user = User::factory()->create();
     $user->forceFill(['role' => UserRole::Patient])->save();

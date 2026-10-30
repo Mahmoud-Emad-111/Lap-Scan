@@ -219,7 +219,7 @@ export function DoctorOrdersPage({ token }: { token: string }) {
                 <div className="grid gap-5">
                     <form
                         onSubmit={applyFilters}
-                        className="grid gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 sm:grid-cols-2 xl:grid-cols-4"
+                        className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:grid-cols-2 xl:grid-cols-4"
                     >
                         <input
                             value={filters.search}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreOrderRequest;
 use App\Http\Resources\Api\V1\OrderResource;
@@ -13,12 +14,23 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Order::class);
+
+        $filters = $request->validate([
+            'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'status' => ['sometimes', 'nullable', Rule::enum(OrderStatus::class)],
+            'priority' => ['sometimes', 'nullable', Rule::in(['normal', 'urgent'])],
+            'branch_id' => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
+            'from' => ['sometimes', 'nullable', 'date'],
+            'to' => ['sometimes', 'nullable', 'date', 'after_or_equal:from'],
+        ]);
+        $displayedOrderId = Order::idFromDisplayNumber(trim($filters['search'] ?? ''));
 
         $orders = Order::query()
             ->with(['branch', 'patient', 'referringDoctor', 'items.sample', 'items.result', 'items.test'])
@@ -29,16 +41,18 @@ class OrderController extends Controller
                     fn ($users) => $users->whereKey($request->user()->id),
                 ),
             )
+            ->when(isset($filters['priority']), fn ($query) => $query->where('priority', $filters['priority']))
+            ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+            ->when(isset($filters['branch_id']), fn ($query) => $query->where('branch_id', $filters['branch_id']))
+            ->when(isset($filters['from']), fn ($query) => $query->whereDate('created_at', '>=', $filters['from']))
+            ->when(isset($filters['to']), fn ($query) => $query->whereDate('created_at', '<=', $filters['to']))
             ->when(
-                in_array($request->query('priority'), ['normal', 'urgent'], true),
-                fn ($query) => $query->where('priority', $request->query('priority')),
-            )
-            ->when(
-                $request->filled('search'),
-                fn ($query) => $query->where(function ($orders) use ($request): void {
-                    $search = $request->string('search')->toString();
+                isset($filters['search']) && $filters['search'] !== '',
+                fn ($query) => $query->where(function ($orders) use ($filters, $displayedOrderId): void {
+                    $search = $filters['search'];
                     $orders
                         ->where('order_number', 'like', '%'.$search.'%')
+                        ->when($displayedOrderId !== null, fn ($orders) => $orders->orWhereKey($displayedOrderId))
                         ->orWhereHas('patient', fn ($patients) => $patients
                             ->where('full_name', 'like', '%'.$search.'%')
                             ->orWhere('phone', 'like', '%'.$search.'%'));
@@ -46,17 +60,22 @@ class OrderController extends Controller
             )
             ->latest('created_at')
             ->latest('id')
-            ->paginate(25);
+            ->paginate(25)
+            ->withQueryString();
 
         return OrderResource::collection($orders);
     }
 
     public function store(StoreOrderRequest $request, CreateOrderAction $createOrder): JsonResponse
     {
-        /** @var array{patient_id: int, branch_id: int, test_ids: list<int>, notes?: string|null} $attributes */
+        /** @var array{patient_id?: int|null, patient_full_name?: string, patient_phone?: string, patient_email?: string|null, patient_date_of_birth?: string|null, patient_gender?: string|null, branch_id: int, test_ids: list<int>, notes?: string|null} $attributes */
         $attributes = $request->validated();
         Gate::authorize('view', Branch::query()->findOrFail($attributes['branch_id']));
-        Gate::authorize('view', Patient::query()->findOrFail($attributes['patient_id']));
+        if (isset($attributes['patient_id'])) {
+            Gate::authorize('view', Patient::query()->findOrFail($attributes['patient_id']));
+        } else {
+            Gate::authorize('create', Patient::class);
+        }
 
         $order = $createOrder->handle($attributes, $request->user());
 

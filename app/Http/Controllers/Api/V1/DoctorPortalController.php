@@ -85,6 +85,7 @@ class DoctorPortalController extends Controller
             'to' => ['nullable', 'date', 'after_or_equal:from'],
             'results_available' => ['nullable', 'boolean'],
         ]);
+        $displayedOrderId = Order::idFromDisplayNumber(trim($filters['search'] ?? ''));
 
         $orders = Order::query()
             ->where('referring_doctor_id', $doctor->id)
@@ -95,11 +96,12 @@ class DoctorPortalController extends Controller
                 'items.sample',
                 'items.result:id,order_item_id,status',
             ])
-            ->when(isset($filters['search']), function ($query) use ($filters): void {
+            ->when(isset($filters['search']), function ($query) use ($filters, $displayedOrderId): void {
                 $search = $filters['search'];
-                $query->where(function ($orders) use ($search): void {
+                $query->where(function ($orders) use ($search, $displayedOrderId): void {
                     $orders
                         ->where('order_number', 'like', '%'.$search.'%')
+                        ->when($displayedOrderId !== null, fn ($orders) => $orders->orWhereKey($displayedOrderId))
                         ->orWhereHas('patient', fn ($patients) => $patients
                             ->where('full_name', 'like', '%'.$search.'%')
                             ->orWhere('phone', 'like', '%'.$search.'%'));
@@ -133,7 +135,7 @@ class DoctorPortalController extends Controller
         CreateDoctorReferralAction $createReferral,
         CreateOrderAction $createOrder,
     ): JsonResponse {
-        /** @var array{request_key: string, patient_id?: int|null, patient_full_name?: string|null, patient_phone: string, patient_email?: string|null, patient_date_of_birth?: string|null, patient_gender?: string|null, branch_id: int, test_ids: list<int>, priority: string, urgent_reason?: string|null, notes?: string|null} $attributes */
+        /** @var array{request_key: string, patient_id?: int|null, patient_full_name?: string|null, patient_phone: string, patient_email?: string|null, patient_date_of_birth?: string|null, patient_gender?: string|null, branch_id: int, test_ids: list<int>, apply_discount?: bool, priority: string, urgent_reason?: string|null, notes?: string|null} $attributes */
         $attributes = $request->validated();
         $order = $createReferral->handle(
             $attributes,

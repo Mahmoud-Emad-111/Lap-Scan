@@ -296,27 +296,65 @@ it('applies an all-referrals rule to every referral for the patient', function (
     $this->assertDatabaseCount('orders', 2);
 });
 
-it('rejects doctor referrals outside a rule validity period', function (string $validFrom, ?string $validUntil) {
+it('rejects doctor referrals outside the validity period of every rule', function () {
+    $this->travelTo('2026-10-30 12:00:00 Africa/Cairo');
+
     $admin = User::factory()->create();
     $admin->forceFill(['role' => UserRole::LabAdmin])->save();
     $doctor = createVerifiedDiscountDoctor();
     $branch = Branch::factory()->create(['is_active' => true]);
     $test = LabTest::factory()->create();
     createReferralDiscountRule($admin, [
-        'valid_from' => $validFrom,
-        'valid_until' => $validUntil,
+        'valid_from' => '2026-10-31',
+    ]);
+    createReferralDiscountRule($admin, [
+        'valid_from' => '2026-10-29',
+        'valid_until' => '2026-10-29',
     ]);
     Sanctum::actingAs($doctor);
 
-    $this->postJson('/api/v1/doctor/orders', referralDiscountPayload($branch, $test))
+    $this->postJson(
+        '/api/v1/doctor/orders',
+        referralDiscountPayload($branch, $test, ['apply_discount' => true]),
+    )
         ->assertUnprocessable()
-        ->assertJsonValidationErrors('discount');
+        ->assertJsonValidationErrors('discount')
+        ->assertJsonPath(
+            'errors.discount.0',
+            'لا توجد قاعدة خصم سارية تنطبق على هذه الإحالة. أوقف خيار تطبيق الخصم أو راجع إعدادات الخصم لدى المعمل.',
+        );
 
     $this->assertDatabaseCount('orders', 0);
-})->with([
-    'future rule' => [today()->addDay()->toDateString(), null],
-    'expired rule' => [today()->subDays(2)->toDateString(), today()->subDay()->toDateString()],
-]);
+});
+
+it('applies a rule from the Cairo calendar date before UTC midnight', function () {
+    $this->travelTo('2026-10-29 23:56:00 UTC');
+
+    $admin = User::factory()->create();
+    $admin->forceFill(['role' => UserRole::LabAdmin])->save();
+    $doctor = createVerifiedDiscountDoctor();
+    $branch = Branch::factory()->create(['is_active' => true]);
+    $test = LabTest::factory()->create(['price' => '100.00']);
+    $rule = createReferralDiscountRule($admin, [
+        'doctor_id' => $doctor->id,
+        'branch_id' => $branch->id,
+        'minimum_subtotal' => '100.00',
+        'valid_from' => '2026-10-30',
+        'valid_until' => '2026-10-30',
+    ]);
+    Sanctum::actingAs($doctor);
+
+    $response = $this->postJson('/api/v1/doctor/orders', referralDiscountPayload($branch, $test))
+        ->assertCreated()
+        ->assertJsonPath('data.discount.rule_id', $rule->id)
+        ->assertJsonPath('data.discount_amount', '10.00');
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $response->json('data.id'),
+        'discount_rule_id' => $rule->id,
+        'discount_amount' => '10.00',
+    ]);
+});
 
 it('prefers the most specific matching rule over a general rule', function () {
     $admin = User::factory()->create();
@@ -371,6 +409,55 @@ it('rejects a doctor referral without an applicable rule and rolls back its pati
 
     $this->assertDatabaseCount('orders', 0);
     $this->assertDatabaseCount('patients', 0);
+});
+
+it('allows a doctor to submit a referral without an applicable discount when discount is disabled', function () {
+    $doctor = createVerifiedDiscountDoctor();
+    $branch = Branch::factory()->create(['is_active' => true]);
+    $test = LabTest::factory()->create(['price' => '175.50']);
+    Sanctum::actingAs($doctor);
+
+    $response = $this->postJson(
+        '/api/v1/doctor/orders',
+        referralDiscountPayload($branch, $test, ['apply_discount' => false]),
+    )->assertCreated()
+        ->assertJsonPath('data.subtotal', '175.50')
+        ->assertJsonPath('data.discount_amount', '0.00')
+        ->assertJsonPath('data.discount', null)
+        ->assertJsonPath('data.total', '175.50');
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $response->json('data.id'),
+        'discount_rule_id' => null,
+        'discount_amount' => '0.00',
+        'total' => '175.50',
+    ]);
+    $this->assertDatabaseCount('patients', 1);
+});
+
+it('does not apply an available discount when the doctor opts out', function () {
+    $admin = User::factory()->create();
+    $admin->forceFill(['role' => UserRole::LabAdmin])->save();
+    $doctor = createVerifiedDiscountDoctor();
+    $branch = Branch::factory()->create(['is_active' => true]);
+    $test = LabTest::factory()->create(['price' => '100.00']);
+    createReferralDiscountRule($admin);
+    Sanctum::actingAs($doctor);
+
+    $response = $this->postJson(
+        '/api/v1/doctor/orders',
+        referralDiscountPayload($branch, $test, ['apply_discount' => false]),
+    )->assertCreated()
+        ->assertJsonPath('data.discount_amount', '0.00')
+        ->assertJsonPath('data.discount', null)
+        ->assertJsonPath('data.total', '100.00');
+
+    $this->assertDatabaseHas('orders', [
+        'id' => $response->json('data.id'),
+        'discount_rule_id' => null,
+        'discount_amount' => '0.00',
+        'total' => '100.00',
+    ]);
 });
 
 it('returns 401 when an unauthenticated user requests referral discount rules', function () {

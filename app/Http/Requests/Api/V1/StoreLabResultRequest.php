@@ -29,7 +29,15 @@ class StoreLabResultRequest extends FormRequest
             'unit' => ['nullable', 'string', 'max:50'],
             'reference_range' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'document' => [
+                'nullable',
+                'file',
+                'mimes:pdf,jpg,jpeg,png,webp',
+                'extensions:pdf,jpg,jpeg,png,webp',
+                'max:10240',
+            ],
             'pdf' => ['nullable', 'file', 'mimes:pdf', 'extensions:pdf', 'max:10240'],
+            'remove_document' => ['sometimes', 'boolean'],
             'remove_pdf' => ['sometimes', 'boolean'],
         ];
     }
@@ -41,10 +49,30 @@ class StoreLabResultRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                if ($this->hasFile('pdf') && $this->boolean('remove_pdf')) {
+                if ($this->hasFile('document') && $this->hasFile('pdf')) {
                     $validator->errors()->add(
-                        'remove_pdf',
+                        'document',
+                        'ارفع ملفًا واحدًا فقط.',
+                    );
+                }
+
+                if (
+                    ($this->hasFile('document') || $this->hasFile('pdf'))
+                    && ($this->boolean('remove_document') || $this->boolean('remove_pdf'))
+                ) {
+                    $errorField = $this->hasFile('pdf') && $this->boolean('remove_pdf')
+                        ? 'remove_pdf'
+                        : 'remove_document';
+                    $validator->errors()->add(
+                        $errorField,
                         'اختر رفع ملف جديد أو إزالة الملف الحالي، وليس كليهما.',
+                    );
+                }
+
+                if ($this->boolean('remove_document') && $this->boolean('remove_pdf')) {
+                    $validator->errors()->add(
+                        'remove_document',
+                        'اختر إزالة المرفق مرة واحدة فقط.',
                     );
                 }
             },

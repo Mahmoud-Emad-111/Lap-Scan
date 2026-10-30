@@ -17,15 +17,17 @@ class ResolveReferralDiscountRuleAction
         bool $isFirstReferral,
         int $subtotalInCents,
     ): ReferralDiscountRule {
+        $businessDate = today(config('app.business_timezone'));
+
         $rules = ReferralDiscountRule::query()
             ->where('is_active', true)
-            ->where(function ($query): void {
+            ->where(function ($query) use ($businessDate): void {
                 $query->whereNull('valid_from')
-                    ->orWhereDate('valid_from', '<=', today());
+                    ->orWhereDate('valid_from', '<=', $businessDate);
             })
-            ->where(function ($query): void {
+            ->where(function ($query) use ($businessDate): void {
                 $query->whereNull('valid_until')
-                    ->orWhereDate('valid_until', '>=', today());
+                    ->orWhereDate('valid_until', '>=', $businessDate);
             })
             ->where(function ($query) use ($doctor): void {
                 $query->whereNull('doctor_id')->orWhere('doctor_id', $doctor->id);
@@ -49,7 +51,7 @@ class ResolveReferralDiscountRuleAction
 
         if ($rules->isEmpty()) {
             throw ValidationException::withMessages([
-                'discount' => 'لا توجد قاعدة خصم سارية تنطبق على هذه الإحالة.',
+                'discount' => 'لا توجد قاعدة خصم سارية تنطبق على هذه الإحالة. أوقف خيار تطبيق الخصم أو راجع إعدادات الخصم لدى المعمل.',
             ]);
         }
 

@@ -15,7 +15,7 @@ class DoctorOrderResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'order_number' => $this->order_number,
+            'order_number' => $this->displayNumber(),
             'status' => $this->status->value,
             'priority' => $this->priority->value,
             'urgent_reason' => $this->urgent_reason,
