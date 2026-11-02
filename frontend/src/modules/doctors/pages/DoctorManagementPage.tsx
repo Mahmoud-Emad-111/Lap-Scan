@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import { useNotifications } from '@/components/ui/notification-provider';
 import {
     DataTable,
     PageShell,
@@ -22,13 +23,8 @@ const statusLabels: Record<DoctorProfile['verification_status'], string> = {
     suspended: 'موقوف',
 };
 
-export function DoctorManagementPage({
-    token,
-    onNotice,
-}: {
-    token: string;
-    onNotice: (message: string) => void;
-}) {
+export function DoctorManagementPage({ token }: { token: string }) {
+    const { showSuccessNotice } = useNotifications();
     const [page, setPage] = useState<Awaited<
         ReturnType<typeof fetchDoctors>
     > | null>(null);
@@ -80,7 +76,7 @@ export function DoctorManagementPage({
             });
             setSelectedDoctor(null);
             setNote('');
-            onNotice(`تم تحديث حالة الطبيب ${selectedDoctor.name}.`);
+            showSuccessNotice(`تم تحديث حالة الطبيب ${selectedDoctor.name}.`);
             await loadDoctors();
         } catch (requestError) {
             if (requestError instanceof ApiError) {
@@ -298,7 +294,11 @@ export function DoctorManagementPage({
                             >
                                 إلغاء
                             </button>
-                            <PrimaryButton type="submit" disabled={busy}>
+                            <PrimaryButton
+                                type="submit"
+                                disabled={busy}
+                                loading={busy}
+                            >
                                 {busy ? 'جارٍ الحفظ…' : 'حفظ القرار'}
                             </PrimaryButton>
                         </div>

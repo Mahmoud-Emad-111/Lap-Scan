@@ -111,20 +111,29 @@ export function PrimaryButton({
     children,
     onClick,
     disabled = false,
+    loading = false,
     type = 'button',
 }: {
     children: ReactNode;
     onClick?: () => void;
     disabled?: boolean;
+    loading?: boolean;
     type?: 'button' | 'submit';
 }) {
     return (
         <button
             type={type}
-            disabled={disabled}
+            disabled={disabled || loading}
+            aria-busy={loading}
             onClick={onClick}
-            className="inline-flex h-11 items-center justify-center rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm shadow-brand-700/15 transition hover:bg-brand-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm shadow-brand-700/15 transition hover:bg-brand-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
         >
+            {loading && (
+                <span
+                    aria-hidden="true"
+                    className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                />
+            )}
             {children}
         </button>
     );

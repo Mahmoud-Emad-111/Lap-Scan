@@ -20,6 +20,10 @@ export const PORTAL_SECTIONS = [
 ] as const;
 
 export type PortalSection = (typeof PORTAL_SECTIONS)[number];
+export type DoctorPortalSection = Extract<
+    PortalSection,
+    'doctor-profile' | 'doctor-orders' | 'doctor-new-referral'
+>;
 
 const LABORATORY_ROLES: UserRole[] = ['lab_staff', 'lab_admin'];
 
@@ -54,6 +58,24 @@ export function getPortalSection(pathname: string): PortalSection | null {
     const section = pathname.replace(/\/+$/, '').slice(1);
 
     return PORTAL_SECTIONS.find((candidate) => candidate === section) ?? null;
+}
+
+export function isDoctorPortalSection(
+    section: string,
+): section is DoctorPortalSection {
+    return (
+        section === 'doctor-profile' ||
+        section === 'doctor-orders' ||
+        section === 'doctor-new-referral'
+    );
+}
+
+export function doctorSectionTitle(section: DoctorPortalSection): string {
+    if (section === 'doctor-profile') {
+        return 'ملفي الطبي والتحقق';
+    }
+
+    return section === 'doctor-new-referral' ? 'إحالة جديدة' : 'إحالاتي الطبية';
 }
 
 export function canAccessPortalSection(

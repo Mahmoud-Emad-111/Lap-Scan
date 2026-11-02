@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import { useNotifications } from '@/components/ui/notification-provider';
 import { WorkflowEditor } from '@/components/laboratory/workflow-editor';
 import { OrderDetailsDialog } from '@/components/laboratory/order-details-dialog';
 import {
@@ -42,20 +43,11 @@ import {
 const inputClass =
     'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70 disabled:bg-slate-50';
 
-export function isWorkflowSection(section: string): section is WorkflowSection {
-    return section in titles;
-}
-
-export function workflowSectionTitle(section: WorkflowSection): string {
-    return titles[section];
-}
-
 export function WorkflowSectionPage({
     section,
     token,
     role,
     currentUserId,
-    onNotice,
     orderRealtimeRevision,
     initialOrderSearch,
 }: {
@@ -63,10 +55,10 @@ export function WorkflowSectionPage({
     token: string;
     role: UserRole;
     currentUserId: number;
-    onNotice: (message: string) => void;
     orderRealtimeRevision: number;
     initialOrderSearch?: string;
 }) {
+    const { showSuccessNotice } = useNotifications();
     const [page, setPage] = useState<ApiPage<WorkflowRow> | null>(null);
     const [report, setReport] = useState<ReportData | null>(null);
     const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -498,7 +490,7 @@ export function WorkflowSectionPage({
             setEditor(null);
             setDocumentPreview(null);
             setDocumentError('');
-            onNotice(
+            showSuccessNotice(
                 editor.kind === 'result' &&
                     (editor.document || editor.removeDocument)
                     ? 'تم حفظ المسودة وتحديث مرفق النتيجة.'
@@ -533,7 +525,7 @@ export function WorkflowSectionPage({
 
         try {
             await collectWorkflowSample(token, sampleId);
-            onNotice('تم تسجيل استلام العينة.');
+            showSuccessNotice('تم تسجيل استلام العينة.');
             await loadPage();
         } catch (requestError) {
             setError(
@@ -552,7 +544,7 @@ export function WorkflowSectionPage({
 
         try {
             await approveWorkflowResult(token, resultId);
-            onNotice('تم اعتماد النتيجة ونشرها للمريض.');
+            showSuccessNotice('تم اعتماد النتيجة ونشرها للمريض.');
             await loadPage();
         } catch (requestError) {
             setError(

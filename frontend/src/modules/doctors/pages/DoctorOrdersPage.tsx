@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import { useNotifications } from '@/components/ui/notification-provider';
 import {
     DataTable,
     PageShell,
@@ -48,6 +49,7 @@ const inputClass =
     'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70 disabled:bg-slate-50';
 
 export function DoctorOrdersPage({ token }: { token: string }) {
+    const { showSuccessNotice } = useNotifications();
     const [orders, setOrders] = useState<DoctorPage | null>(null);
     const [branches, setBranches] = useState<BranchOption[]>([]);
     const [filters, setFilters] = useState<OrderFilters>(EMPTY_FILTERS);
@@ -61,6 +63,7 @@ export function DoctorOrdersPage({ token }: { token: string }) {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [filtering, setFiltering] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
@@ -78,7 +81,21 @@ export function DoctorOrdersPage({ token }: { token: string }) {
                 setOrders(orderPage);
 
                 if (doctorProfile.verification_status === 'verified') {
-                    setBranches(await fetchDoctorBranches(token));
+                    void fetchDoctorBranches(token)
+                        .then((branchOptions) => {
+                            if (!cancelled) {
+                                setBranches(branchOptions);
+                            }
+                        })
+                        .catch((requestError: unknown) => {
+                            if (!cancelled) {
+                                setError(
+                                    requestError instanceof Error
+                                        ? requestError.message
+                                        : 'تعذّر تحميل قائمة الفروع.',
+                                );
+                            }
+                        });
                 }
             } catch (requestError) {
                 if (!cancelled) {
@@ -103,6 +120,7 @@ export function DoctorOrdersPage({ token }: { token: string }) {
     async function applyFilters(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setBusy(true);
+        setFiltering(true);
         setErrors({});
         setError('');
 
@@ -122,6 +140,7 @@ export function DoctorOrdersPage({ token }: { token: string }) {
             setOrders(await fetchDoctorOrders(token, query));
             setSelectedOrder(null);
             setSelectedResult(null);
+            showSuccessNotice('تم تحديث قائمة الإحالات.');
         } catch (requestError) {
             if (requestError instanceof ApiError) {
                 setErrors(requestError.validationErrors);
@@ -133,6 +152,7 @@ export function DoctorOrdersPage({ token }: { token: string }) {
             }
         } finally {
             setBusy(false);
+            setFiltering(false);
         }
     }
 
@@ -327,7 +347,11 @@ export function DoctorOrdersPage({ token }: { token: string }) {
                             <option value="false">لا توجد نتيجة معتمدة</option>
                         </select>
                         <div className="flex items-end">
-                            <PrimaryButton type="submit" disabled={busy}>
+                            <PrimaryButton
+                                type="submit"
+                                disabled={busy}
+                                loading={filtering}
+                            >
                                 تطبيق التصفية
                             </PrimaryButton>
                         </div>

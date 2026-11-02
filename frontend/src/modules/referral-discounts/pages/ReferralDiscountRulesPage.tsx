@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import { useNotifications } from '@/components/ui/notification-provider';
 import {
     DataTable,
     PageShell,
@@ -56,13 +57,8 @@ const EMPTY_FORM: RuleForm = {
 const inputClass =
     'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70 disabled:bg-slate-50';
 
-export function ReferralDiscountRulesPage({
-    token,
-    onNotice,
-}: {
-    token: string;
-    onNotice: (message: string) => void;
-}) {
+export function ReferralDiscountRulesPage({ token }: { token: string }) {
+    const { showSuccessNotice } = useNotifications();
     const [page, setPage] = useState<ReferralDiscountRulePage | null>(null);
     const [doctors, setDoctors] = useState<ReferralDiscountDoctorOption[]>([]);
     const [branches, setBranches] = useState<ReferralDiscountBranchOption[]>(
@@ -152,7 +148,7 @@ export function ReferralDiscountRulesPage({
                 ? await updateReferralDiscountRule(token, form.id, payload)
                 : await createReferralDiscountRule(token, payload);
             resetForm();
-            onNotice(
+            showSuccessNotice(
                 form.id
                     ? `تم تحديث قاعدة «${savedRule.name}».`
                     : `تم إنشاء قاعدة «${savedRule.name}».`,
@@ -430,7 +426,7 @@ export function ReferralDiscountRulesPage({
                     </p>
                 )}
                 <div className="flex justify-start">
-                    <PrimaryButton type="submit" disabled={busy}>
+                    <PrimaryButton type="submit" disabled={busy} loading={busy}>
                         {busy
                             ? 'جارٍ الحفظ...'
                             : form.id

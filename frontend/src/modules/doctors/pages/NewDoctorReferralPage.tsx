@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import { useNotifications } from '@/components/ui/notification-provider';
 import { formatPrice } from '@/components/laboratory/workflow-types';
 import { PageShell, PrimaryButton } from '@/components/laboratory/workflow-ui';
 import {
@@ -42,13 +43,8 @@ const EMPTY_PATIENT: PatientForm = {
 const inputClass =
     'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-100/70 disabled:bg-slate-50';
 
-export function NewDoctorReferralPage({
-    token,
-    onNotice,
-}: {
-    token: string;
-    onNotice: (message: string) => void;
-}) {
+export function NewDoctorReferralPage({ token }: { token: string }) {
+    const { showSuccessNotice } = useNotifications();
     const [profile, setProfile] = useState<DoctorProfile | null>(null);
     const [branches, setBranches] = useState<BranchOption[]>([]);
     const [tests, setTests] = useState<TestOption[]>([]);
@@ -67,6 +63,7 @@ export function NewDoctorReferralPage({
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [confirmation, setConfirmation] = useState<DoctorOrder | null>(null);
     const requestKey = useRef(crypto.randomUUID());
 
@@ -136,6 +133,7 @@ export function NewDoctorReferralPage({
     async function submitReferral(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setBusy(true);
+        setSubmitting(true);
         setErrors({});
         setError('');
         setConfirmation(null);
@@ -159,7 +157,7 @@ export function NewDoctorReferralPage({
             const order = await createDoctorReferral(token, payload);
             setConfirmation(order);
             requestKey.current = crypto.randomUUID();
-            onNotice(`تم إرسال الإحالة رقم ${order.order_number}.`);
+            showSuccessNotice(`تم إرسال الإحالة رقم ${order.order_number}.`);
         } catch (requestError) {
             if (requestError instanceof ApiError) {
                 setErrors(requestError.validationErrors);
@@ -171,6 +169,7 @@ export function NewDoctorReferralPage({
             }
         } finally {
             setBusy(false);
+            setSubmitting(false);
         }
     }
 
@@ -205,9 +204,12 @@ export function NewDoctorReferralPage({
             ) : (
                 <div className="grid gap-5">
                     {confirmation && (
-                        <div className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900 sm:grid-cols-2">
+                        <section
+                            aria-label="ملخص الإحالة المسجلة"
+                            className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 text-slate-700 sm:grid-cols-2"
+                        >
                             <p className="font-semibold sm:col-span-2">
-                                تم تسجيل الإحالة بنجاح. رقم الطلب:{' '}
+                                ملخص الإحالة · رقم الطلب:{' '}
                                 <strong dir="ltr">
                                     {confirmation.order_number}
                                 </strong>
@@ -229,7 +231,7 @@ export function NewDoctorReferralPage({
                                 الإجمالي بعد الخصم:{' '}
                                 {formatPrice(confirmation.total)}
                             </p>
-                        </div>
+                        </section>
                     )}
                     <form
                         onSubmit={submitReferral}
@@ -553,7 +555,11 @@ export function NewDoctorReferralPage({
                         </section>
 
                         <div>
-                            <PrimaryButton type="submit" disabled={busy}>
+                            <PrimaryButton
+                                type="submit"
+                                disabled={busy}
+                                loading={submitting}
+                            >
                                 {busy ? 'جارٍ إرسال الإحالة…' : 'إرسال الإحالة'}
                             </PrimaryButton>
                         </div>

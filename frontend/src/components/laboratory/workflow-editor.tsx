@@ -69,9 +69,8 @@ export function WorkflowEditor({
 }) {
     const documentInputRef = useRef<HTMLInputElement>(null);
     const selectedDocument = editor.kind === 'result' ? editor.document : null;
-    const [selectedDocumentPreviewUrl, setSelectedDocumentPreviewUrl] = useState<
-        string | null
-    >(null);
+    const [selectedDocumentPreviewUrl, setSelectedDocumentPreviewUrl] =
+        useState<string | null>(null);
     const [documentValidationError, setDocumentValidationError] = useState('');
     const [patientSearch, setPatientSearch] = useState('');
     const [patientSearchResults, setPatientSearchResults] = useState<
@@ -540,11 +539,14 @@ export function WorkflowEditor({
                             className="grid justify-items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-4 py-6 text-center"
                         >
                             <p className="text-sm text-slate-600">
-                                اسحب ملف PDF أو صورة إلى هنا، أو اختر ملفًا من جهازك.
+                                اسحب ملف PDF أو صورة إلى هنا، أو اختر ملفًا من
+                                جهازك.
                             </p>
                             <button
                                 type="button"
-                                onClick={() => documentInputRef.current?.click()}
+                                onClick={() =>
+                                    documentInputRef.current?.click()
+                                }
                                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                             >
                                 اختيار ملف
@@ -563,14 +565,15 @@ export function WorkflowEditor({
                                 documentError}
                         </p>
                     )}
-                    {(errors.remove_document?.[0] || errors.remove_pdf?.[0]) && (
+                    {(errors.remove_document?.[0] ||
+                        errors.remove_pdf?.[0]) && (
                         <p role="alert" className="text-xs text-rose-600">
                             {(errors.remove_document ?? errors.remove_pdf)?.[0]}
                         </p>
                     )}
 
-                    {previewUrl && (
-                        previewType.startsWith('image/') ? (
+                    {previewUrl &&
+                        (previewType.startsWith('image/') ? (
                             <img
                                 alt="معاينة صورة النتيجة"
                                 src={previewUrl}
@@ -582,8 +585,7 @@ export function WorkflowEditor({
                                 src={previewUrl}
                                 className="h-72 w-full rounded-lg border border-slate-200 sm:h-[28rem]"
                             />
-                        )
-                    )}
+                        ))}
                 </section>
 
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
@@ -963,7 +965,11 @@ export function WorkflowEditor({
                         >
                             إلغاء
                         </button>
-                        <PrimaryButton type="submit" disabled={busy}>
+                        <PrimaryButton
+                            type="submit"
+                            disabled={busy}
+                            loading={busy}
+                        >
                             {busy ? 'جارٍ الحفظ...' : 'حفظ'}
                         </PrimaryButton>
                     </footer>

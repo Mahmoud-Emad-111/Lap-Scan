@@ -119,16 +119,29 @@ export async function markOrderNotificationsAsRead(
 }
 
 export function createOrderEcho(token: string): Echo<'reverb'> {
+    const key = import.meta.env.VITE_REVERB_APP_KEY?.trim();
+
+    if (!key) {
+        throw new Error(
+            'Realtime is not configured. Set VITE_REVERB_APP_KEY for the frontend build.',
+        );
+    }
+
     const scheme = import.meta.env.VITE_REVERB_SCHEME ?? 'http';
-    const defaultPort = scheme === 'https' ? 443 : 8082;
+    const defaultPort = scheme === 'https' ? 443 : 8080;
+    const port = Number(import.meta.env.VITE_REVERB_PORT ?? defaultPort);
+
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error('The configured Reverb port is invalid.');
+    }
 
     return new Echo({
         broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY ?? '',
+        key,
         Pusher,
         wsHost: import.meta.env.VITE_REVERB_HOST ?? window.location.hostname,
-        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? defaultPort),
-        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? defaultPort),
+        wsPort: port,
+        wssPort: port,
         forceTLS: scheme === 'https',
         enabledTransports: ['ws', 'wss'],
         authEndpoint: resolveApiUrl('/api/broadcasting/auth'),

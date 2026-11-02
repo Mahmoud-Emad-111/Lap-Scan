@@ -10,6 +10,9 @@ services:
       REVERB_HOST: reverb
       REVERB_PORT: 8080
       REVERB_SCHEME: http
+      REVERB_APP_ID: ${REVERB_APP_ID:-lap-local}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-local-reverb-secret}
     depends_on:
       - mysql
     networks:
@@ -27,6 +30,9 @@ services:
       REVERB_HOST: reverb
       REVERB_PORT: 8080
       REVERB_SCHEME: http
+      REVERB_APP_ID: ${REVERB_APP_ID:-lap-local}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-local-reverb-secret}
     depends_on:
       mysql:
         condition: service_healthy
@@ -39,6 +45,13 @@ services:
       target: development
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     restart: unless-stopped
+    environment:
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+      REVERB_APP_ID: ${REVERB_APP_ID:-lap-local}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-local-reverb-secret}
     ports:
       - "${REVERB_PUBLISH_PORT:-8080}:8080"
     volumes:
@@ -57,7 +70,7 @@ services:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost}
       VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
       VITE_REVERB_HOST: ${VITE_REVERB_BROWSER_HOST:-localhost}
-      VITE_REVERB_PORT: ${VITE_REVERB_BROWSER_PORT:-8082}
+      VITE_REVERB_PORT: ${VITE_REVERB_BROWSER_PORT:-8080}
       VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
     volumes:
       - ./frontend:/app
@@ -101,7 +114,7 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
         VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-local-reverb-key}
         VITE_REVERB_HOST: ${VITE_REVERB_BROWSER_HOST:-localhost}
-        VITE_REVERB_PORT: ${VITE_REVERB_BROWSER_PORT:-8082}
+        VITE_REVERB_PORT: ${VITE_REVERB_BROWSER_PORT:-8080}
         VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
     ports:
       - "80:80"

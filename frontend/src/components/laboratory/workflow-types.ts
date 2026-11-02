@@ -126,6 +126,14 @@ export const titles: Record<WorkflowSection, string> = {
     'patient-results': 'نتائجي',
 };
 
+export function isWorkflowSection(section: string): section is WorkflowSection {
+    return Object.hasOwn(titles, section);
+}
+
+export function workflowSectionTitle(section: WorkflowSection): string {
+    return titles[section];
+}
+
 export const roleLabels: Record<UserRole, string> = {
     patient: 'مريض',
     doctor: 'طبيب',

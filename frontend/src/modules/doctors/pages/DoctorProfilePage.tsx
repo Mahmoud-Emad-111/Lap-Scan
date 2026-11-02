@@ -1,6 +1,7 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
+import { useNotifications } from '@/components/ui/notification-provider';
 import { PageShell, PrimaryButton } from '@/components/laboratory/workflow-ui';
 import {
     fetchDoctorProfile,
@@ -18,13 +19,8 @@ const statusLabels: Record<DoctorProfile['verification_status'], string> = {
     suspended: 'الحساب موقوف مؤقتاً',
 };
 
-export function DoctorProfilePage({
-    token,
-    onNotice,
-}: {
-    token: string;
-    onNotice: (message: string) => void;
-}) {
+export function DoctorProfilePage({ token }: { token: string }) {
+    const { showSuccessNotice } = useNotifications();
     const [profile, setProfile] = useState<DoctorProfile | null>(null);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [error, setError] = useState('');
@@ -73,7 +69,7 @@ export function DoctorProfilePage({
                     license_number: profile.license_number ?? '',
                 }),
             );
-            onNotice('تم حفظ بيانات الطبيب وإرسالها للتحقق.');
+            showSuccessNotice('تم حفظ بيانات الطبيب وإرسالها للتحقق.');
         } catch (requestError) {
             if (requestError instanceof ApiError) {
                 setErrors(requestError.validationErrors);
@@ -174,7 +170,11 @@ export function DoctorProfilePage({
                             />
                         </label>
                         <div className="sm:col-span-2">
-                            <PrimaryButton type="submit" disabled={busy}>
+                            <PrimaryButton
+                                type="submit"
+                                disabled={busy}
+                                loading={busy}
+                            >
                                 {busy ? 'جارٍ الحفظ…' : 'حفظ وإرسال للمراجعة'}
                             </PrimaryButton>
                         </div>
