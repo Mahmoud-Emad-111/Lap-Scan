@@ -210,7 +210,7 @@ it('keeps PDF downloads within the existing branch authorization boundary', func
     $patient = User::factory()->create();
     $patient->forceFill(['role' => UserRole::Patient])->save();
     Sanctum::actingAs($patient);
-    $this->get("/api/v1/results/{$result->id}/document")->assertForbidden();
+    $this->get("/api/v1/results/{$result->id}/document")->assertNotFound();
 
     Sanctum::actingAs($staff);
     $staff->branches()->attach($branch);

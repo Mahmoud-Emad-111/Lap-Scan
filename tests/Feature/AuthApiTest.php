@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\UserRole;
+use App\Models\Patient;
 use App\Models\User;
 
 it('issues an expiring bearer token for valid credentials', function () {
@@ -31,6 +33,37 @@ it('returns 401 when the password is invalid', function () {
         'email' => 'lab@example.test',
         'password' => 'incorrect',
         'device_name' => 'laboratory-client',
+    ])->assertUnauthorized();
+
+    $this->assertDatabaseCount('personal_access_tokens', 0);
+});
+
+it('allows patients to sign in with their unique linked phone number', function () {
+    $user = User::factory()->create();
+    $user->forceFill(['role' => UserRole::Patient])->save();
+    Patient::factory()->for($user)->create(['phone' => '01012345678']);
+
+    $this->postJson('/api/v1/login', [
+        'identifier' => '01012345678',
+        'password' => 'password',
+        'device_name' => 'patient-mobile-web',
+    ])->assertOk()
+        ->assertJsonPath('data.user.id', $user->id)
+        ->assertJsonPath('data.user.role', 'patient');
+});
+
+it('returns 401 when a phone number matches more than one patient', function () {
+    $firstUser = User::factory()->create();
+    $firstUser->forceFill(['role' => UserRole::Patient])->save();
+    Patient::factory()->for($firstUser)->create(['phone' => '01012345678']);
+    $secondUser = User::factory()->create();
+    $secondUser->forceFill(['role' => UserRole::Patient])->save();
+    Patient::factory()->for($secondUser)->create(['phone' => '01012345678']);
+
+    $this->postJson('/api/v1/login', [
+        'identifier' => '01012345678',
+        'password' => 'password',
+        'device_name' => 'patient-mobile-web',
     ])->assertUnauthorized();
 
     $this->assertDatabaseCount('personal_access_tokens', 0);

@@ -64,6 +64,9 @@ export async function fetchWorkflowRows(
     const endpoint = {
         users: UserController.index(),
         orders: OrderController.index(),
+        'home-collections': OrderController.index({
+            query: { source: 'home_collection' },
+        }),
         samples: SampleController.index(),
         results: OrderController.index(),
         'patient-orders': PatientPortalController.orders(),
@@ -82,9 +85,10 @@ export function getWorkflowOrdersUrl(
         from?: string;
         to?: string;
     } = {},
+    source?: 'home_collection',
 ): string {
     return OrderController.index({
-        query: filters,
+        query: { ...filters, ...(source ? { source } : {}) },
     }).url;
 }
 

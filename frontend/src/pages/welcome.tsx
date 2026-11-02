@@ -21,7 +21,7 @@ import { LoginPage } from '@/modules/auth/pages/LoginPage';
 import { CatalogEditorDialog } from '@/modules/laboratory/components/CatalogEditorDialog';
 import { useLaboratoryCatalog } from '@/modules/laboratory/hooks/useLaboratoryCatalog';
 import { usePortalAuth } from '@/modules/auth/hooks/usePortalAuth';
-import { type StoredDoctorReferralNotification } from '@/modules/laboratory/services/orderRealtime';
+import { type StoredOrderNotification } from '@/modules/laboratory/services/orderRealtime';
 import { useOrderNotifications } from '@/modules/laboratory/hooks/useOrderNotifications';
 
 type Section = PortalSection;
@@ -56,7 +56,7 @@ function WelcomePage() {
     } = auth;
     const section = getPortalSection(location.pathname) ?? 'overview';
     const initialOrderSearch =
-        section === 'orders'
+        section === 'orders' || section === 'home-collections'
             ? (new URLSearchParams(location.search).get('order') ?? undefined)
             : undefined;
     const catalog = useLaboratoryCatalog({
@@ -98,15 +98,22 @@ function WelcomePage() {
         realtimeRevision: orderRealtimeRevision,
         realtimeStatus,
         soundEnabled: soundNotificationsEnabled,
+        firebasePushAvailable,
+        firebasePushEnabled,
+        firebasePushBusy,
         markNotificationsAsRead: synchronizeReadNotifications,
         toggleSoundNotifications,
+        toggleFirebasePushNotifications,
     } = useOrderNotifications({ token, user });
 
-    function openOrderNotification(
-        notification: StoredDoctorReferralNotification,
-    ) {
+    function openOrderNotification(notification: StoredOrderNotification) {
+        const destination =
+            notification.kind === 'home_collection'
+                ? 'home-collections'
+                : 'orders';
+
         void navigate(
-            `${getPortalPath('orders')}?order=${encodeURIComponent(notification.order_number)}`,
+            `${getPortalPath(destination)}?order=${encodeURIComponent(notification.order_number)}`,
         );
     }
 
@@ -144,6 +151,11 @@ function WelcomePage() {
                           icon: 'clipboard' as const,
                       },
                       {
+                          id: 'home-collections' as const,
+                          label: 'طلبات السحب المنزلي',
+                          icon: 'activity' as const,
+                      },
+                      {
                           id: 'samples' as const,
                           label: 'العينات',
                           icon: 'flask' as const,
@@ -176,6 +188,16 @@ function WelcomePage() {
                           id: 'referral-discounts' as const,
                           label: 'خصومات الإحالات',
                           icon: 'report' as const,
+                      },
+                      {
+                          id: 'patient-promotions' as const,
+                          label: 'العروض والكوبونات',
+                          icon: 'report' as const,
+                      },
+                      {
+                          id: 'settings' as const,
+                          label: 'الإعدادات',
+                          icon: 'settings' as const,
                       },
                   ]
                 : []),
@@ -261,15 +283,19 @@ function WelcomePage() {
           ? 'اعتماد الأطباء'
           : section === 'referral-discounts'
             ? 'خصومات الإحالات'
-            : isWorkflowSection(section)
-              ? workflowSectionTitle(section)
-              : section === 'patients'
-                ? 'المرضى'
-                : section === 'tests'
-                  ? 'كتالوج التحاليل'
-                  : section === 'branches'
-                    ? 'الفروع'
-                    : 'نظرة عامة';
+            : section === 'patient-promotions'
+              ? 'عروض المرضى وكوبوناتهم'
+              : section === 'settings'
+                ? 'إعدادات النظام'
+                : isWorkflowSection(section)
+                  ? workflowSectionTitle(section)
+                  : section === 'patients'
+                    ? 'المرضى'
+                    : section === 'tests'
+                      ? 'كتالوج التحاليل'
+                      : section === 'branches'
+                        ? 'الفروع'
+                        : 'نظرة عامة';
     return (
         <PortalLayout
             section={section}
@@ -281,9 +307,13 @@ function WelcomePage() {
             notifications={orderNotifications}
             realtimeStatus={realtimeStatus}
             soundNotificationsEnabled={soundNotificationsEnabled}
+            firebasePushAvailable={firebasePushAvailable}
+            firebasePushEnabled={firebasePushEnabled}
+            firebasePushBusy={firebasePushBusy}
             onNavigate={navigateToSection}
             onSignOut={() => void handleLogout()}
             onToggleSoundNotifications={toggleSoundNotifications}
+            onToggleFirebasePushNotifications={toggleFirebasePushNotifications}
             onMarkNotificationsAsRead={synchronizeReadNotifications}
             onOpenNotification={openOrderNotification}
         >

@@ -4,15 +4,22 @@ namespace App\Modules\Results\Actions;
 
 use App\Enums\LabResultStatus;
 use App\Enums\OrderStatus;
+use App\Events\PatientPortalUpdated;
 use App\Models\LabResult;
+use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
+use App\Modules\Promotions\Actions\IssuePatientReferralRewardsAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ApproveLabResultAction
 {
+    public function __construct(
+        private readonly IssuePatientReferralRewardsAction $issueReferralRewards,
+    ) {}
+
     public function handle(LabResult $result, User $approver): LabResult
     {
         return DB::transaction(function () use ($result, $approver): LabResult {
@@ -39,10 +46,20 @@ class ApproveLabResultAction
                 ->whereDoesntHave('result', fn (Builder $query): Builder => $query
                     ->where('status', LabResultStatus::Approved->value))
                 ->exists();
+            $order = Order::query()->whereKey($orderId)->lockForUpdate()->firstOrFail();
 
-            if (! $hasUnapprovedResults) {
-                $result->orderItem->order()->update(['status' => OrderStatus::Completed]);
+            if (! $hasUnapprovedResults && $order->status !== OrderStatus::Completed) {
+                $order->update(['status' => OrderStatus::Completed]);
+
+                if ($order->patient !== null) {
+                    $this->issueReferralRewards->handle($order->patient, $order, $approver);
+                }
             }
+
+            PatientPortalUpdated::dispatch(
+                $order->refresh(),
+                'result_available',
+            );
 
             return $result->refresh();
         });

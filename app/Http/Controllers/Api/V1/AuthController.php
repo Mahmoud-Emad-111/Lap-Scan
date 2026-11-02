@@ -16,7 +16,21 @@ class AuthController extends Controller
     public function store(LoginRequest $request): JsonResponse
     {
         $credentials = $request->validated();
-        $user = User::query()->where('email', $credentials['email'])->first();
+        $identifier = $credentials['identifier'] ?? $credentials['email'];
+        $user = User::query()->where('email', $identifier)->first();
+
+        if ($user === null && ! filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            $matchingPatients = User::query()
+                ->where('role', UserRole::Patient)
+                ->whereHas(
+                    'patientProfile',
+                    fn ($query) => $query->where('phone', $identifier),
+                )
+                ->limit(2)
+                ->get();
+
+            $user = $matchingPatients->count() === 1 ? $matchingPatients->first() : null;
+        }
 
         if ($user === null || ! Hash::check($credentials['password'], $user->password)) {
             return response()->json(['message' => 'The provided credentials are invalid.'], 401);

@@ -17,6 +17,11 @@ class UserPolicy
         return $user->role === UserRole::LabAdmin;
     }
 
+    public function managePatientPromotions(User $user): bool
+    {
+        return $user->role === UserRole::LabAdmin;
+    }
+
     /**
      * Determine whether the user can view any models.
      */

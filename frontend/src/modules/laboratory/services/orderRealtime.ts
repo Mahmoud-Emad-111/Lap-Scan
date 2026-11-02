@@ -9,19 +9,45 @@ export type DoctorReferralCreatedPayload = {
     created_at: string;
 };
 
-export type StoredDoctorReferralNotification = DoctorReferralCreatedPayload & {
+export type HomeCollectionRequestedPayload = {
+    order_id: number;
+    branch_id: number;
+    order_number: string;
+    created_at: string;
+};
+
+export type StoredOrderNotification = {
+    order_id: number;
+    branch_id: number;
+    order_number: string;
+    created_at: string;
+    kind: 'doctor_referral' | 'home_collection';
     isRead: boolean;
 };
 
 const ORDER_NOTIFICATION_HISTORY_LIMIT = 30;
 
-function isStoredDoctorReferralNotification(
+function isStoredOrderNotification(
     notification: unknown,
-): notification is StoredDoctorReferralNotification {
+): notification is StoredOrderNotification {
+    if (typeof notification !== 'object' || notification === null) {
+        return false;
+    }
+
+    const stored = notification as Record<string, unknown>;
+
     return (
-        isDoctorReferralCreatedPayload(notification) &&
+        typeof stored.order_id === 'number' &&
+        Number.isSafeInteger(stored.order_id) &&
+        typeof stored.branch_id === 'number' &&
+        Number.isSafeInteger(stored.branch_id) &&
+        typeof stored.order_number === 'string' &&
+        typeof stored.created_at === 'string' &&
         'isRead' in notification &&
-        typeof notification.isRead === 'boolean'
+        typeof stored.isRead === 'boolean' &&
+        (stored.kind === undefined ||
+            stored.kind === 'doctor_referral' ||
+            stored.kind === 'home_collection')
     );
 }
 
@@ -29,9 +55,7 @@ function notificationStorageKey(userId: number): string {
     return `lab-doctor-referral-notifications:${userId}`;
 }
 
-function readOrderNotifications(
-    userId: number,
-): StoredDoctorReferralNotification[] {
+function readOrderNotifications(userId: number): StoredOrderNotification[] {
     const stored = window.localStorage.getItem(notificationStorageKey(userId));
 
     if (stored === null) {
@@ -42,25 +66,35 @@ function readOrderNotifications(
 
     if (
         !Array.isArray(notifications) ||
-        !notifications.every(isStoredDoctorReferralNotification)
+        !notifications.every(isStoredOrderNotification)
     ) {
         throw new Error('Stored doctor referral notifications are invalid.');
     }
 
-    return notifications.slice(0, ORDER_NOTIFICATION_HISTORY_LIMIT);
+    return notifications
+        .map((notification) => ({
+            ...notification,
+            kind: notification.kind ?? 'doctor_referral',
+        }))
+        .slice(0, ORDER_NOTIFICATION_HISTORY_LIMIT);
 }
 
 export function getOrderNotifications(
     userId: number,
-): StoredDoctorReferralNotification[] {
+): StoredOrderNotification[] {
     return readOrderNotifications(userId);
 }
 
-export async function rememberDoctorReferralNotification(
+export function getOrderNotificationStorageKey(userId: number): string {
+    return notificationStorageKey(userId);
+}
+
+export async function rememberOrderNotification(
     userId: number,
-    payload: DoctorReferralCreatedPayload,
-): Promise<StoredDoctorReferralNotification[]> {
-    const remember = (): StoredDoctorReferralNotification[] => {
+    payload: DoctorReferralCreatedPayload | HomeCollectionRequestedPayload,
+    kind: StoredOrderNotification['kind'],
+): Promise<StoredOrderNotification[]> {
+    const remember = (): StoredOrderNotification[] => {
         const notifications = readOrderNotifications(userId);
 
         if (
@@ -70,7 +104,7 @@ export async function rememberDoctorReferralNotification(
         }
 
         const updatedNotifications = [
-            { ...payload, isRead: false },
+            { ...payload, kind, isRead: false },
             ...notifications,
         ].slice(0, ORDER_NOTIFICATION_HISTORY_LIMIT);
 
@@ -94,8 +128,8 @@ export async function rememberDoctorReferralNotification(
 
 export async function markOrderNotificationsAsRead(
     userId: number,
-): Promise<StoredDoctorReferralNotification[]> {
-    const markAsRead = (): StoredDoctorReferralNotification[] => {
+): Promise<StoredOrderNotification[]> {
+    const markAsRead = (): StoredOrderNotification[] => {
         const notifications = readOrderNotifications(userId).map(
             (notification) => ({ ...notification, isRead: true }),
         );
@@ -170,6 +204,36 @@ export function isDoctorReferralCreatedPayload(
         typeof event.order_number === 'string' &&
         typeof event.created_at === 'string'
     );
+}
+
+export function getHomeCollectionRequestedPayload(
+    payload: unknown,
+): HomeCollectionRequestedPayload | null {
+    if (typeof payload !== 'object' || payload === null) {
+        return null;
+    }
+
+    const event = payload as Record<string, unknown>;
+    const orderId = Number(event.order_id);
+    const branchId = Number(event.branch_id);
+
+    if (
+        !Number.isSafeInteger(orderId) ||
+        orderId < 1 ||
+        !Number.isSafeInteger(branchId) ||
+        branchId < 1 ||
+        typeof event.order_number !== 'string' ||
+        typeof event.created_at !== 'string'
+    ) {
+        return null;
+    }
+
+    return {
+        order_id: orderId,
+        branch_id: branchId,
+        order_number: event.order_number,
+        created_at: event.created_at,
+    };
 }
 
 export async function claimOrderNotification(

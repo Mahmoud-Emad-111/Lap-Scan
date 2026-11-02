@@ -37,6 +37,24 @@ class Patient extends Model
         return $this->hasMany(Order::class);
     }
 
+    /** @return HasMany<PatientPromotion, $this> */
+    public function promotions(): HasMany
+    {
+        return $this->hasMany(PatientPromotion::class);
+    }
+
+    /** @return HasMany<PatientReferral, $this> */
+    public function referralsSent(): HasMany
+    {
+        return $this->hasMany(PatientReferral::class, 'inviter_patient_id');
+    }
+
+    /** @return HasMany<PatientReferral, $this> */
+    public function referralReceived(): HasMany
+    {
+        return $this->hasMany(PatientReferral::class, 'invited_patient_id');
+    }
+
     protected function casts(): array
     {
         return [

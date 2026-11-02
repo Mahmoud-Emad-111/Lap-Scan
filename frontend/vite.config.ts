@@ -30,9 +30,18 @@ export default defineConfig(({ mode }) => {
         frontendEnvironment.VITE_REVERB_PORT ??
         applicationEnvironment.VITE_REVERB_BROWSER_PORT ??
         applicationEnvironment.VITE_REVERB_PORT;
-    const realtimeVariables = ['VITE_REVERB_APP_KEY', 'VITE_REVERB_SCHEME'];
+    const publicRuntimeVariables = [
+        'VITE_REVERB_APP_KEY',
+        'VITE_REVERB_SCHEME',
+        'VITE_FIREBASE_API_KEY',
+        'VITE_FIREBASE_AUTH_DOMAIN',
+        'VITE_FIREBASE_PROJECT_ID',
+        'VITE_FIREBASE_MESSAGING_SENDER_ID',
+        'VITE_FIREBASE_APP_ID',
+        'VITE_FIREBASE_VAPID_KEY',
+    ];
     const define = Object.fromEntries(
-        realtimeVariables.flatMap((name) => {
+        publicRuntimeVariables.flatMap((name) => {
             const value =
                 process.env[name] ??
                 frontendEnvironment[name] ??

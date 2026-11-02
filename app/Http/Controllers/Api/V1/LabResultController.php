@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\CorrectLabResultRequest;
 use App\Http\Requests\Api\V1\StoreLabResultRequest;
@@ -69,9 +70,13 @@ class LabResultController extends Controller
             ->setStatusCode(201);
     }
 
-    public function document(LabResult $result): StreamedResponse
+    public function document(Request $request, LabResult $result): StreamedResponse
     {
-        Gate::authorize('downloadDocument', $result);
+        if ($request->user()->role === UserRole::Patient) {
+            abort_unless(Gate::allows('downloadDocument', $result), 404);
+        } else {
+            Gate::authorize('downloadDocument', $result);
+        }
 
         abort_if($result->document_path === null, 404);
         abort_unless(Storage::disk('local')->exists($result->document_path), 404);

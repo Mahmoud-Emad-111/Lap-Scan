@@ -19,11 +19,23 @@ In another terminal, start Laravel from the repository root with `php artisan se
 
 ## Environment and API authentication
 
-| Variable            | Purpose                                                               | Local development value |
-| ------------------- | --------------------------------------------------------------------- | ----------------------- |
-| `VITE_API_BASE_URL` | API origin; the centralized client appends generated `/api/...` paths | `http://localhost:8000` |
+| Variable                            | Purpose                                                               | Local development value |
+| ----------------------------------- | --------------------------------------------------------------------- | ----------------------- |
+| `VITE_API_BASE_URL`                 | API origin; the centralized client appends generated `/api/...` paths | `http://localhost:8000` |
+| `VITE_REVERB_APP_KEY`               | Reverb application key used by Echo                                   | `local-reverb-key`      |
+| `VITE_REVERB_HOST`                  | Reverb host reachable from this browser                               | `localhost`             |
+| `VITE_REVERB_PORT`                  | Reverb browser port                                                   | `8080`                  |
+| `VITE_REVERB_SCHEME`                | Reverb connection scheme                                              | `http`                  |
+| `VITE_FIREBASE_API_KEY`             | Firebase web app API key                                               | Firebase project value  |
+| `VITE_FIREBASE_AUTH_DOMAIN`         | Firebase web app auth domain                                           | Firebase project value  |
+| `VITE_FIREBASE_PROJECT_ID`          | Firebase project ID                                                    | Firebase project value  |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Cloud Messaging sender ID                                     | Firebase project value  |
+| `VITE_FIREBASE_APP_ID`              | Firebase web app ID                                                     | Firebase project value  |
+| `VITE_FIREBASE_VAPID_KEY`           | Firebase Web Push certificate key                                      | Firebase project value  |
 
 Copy `.env.example` to `.env` and adjust the API origin for your environment. Use the API origin only, without an `/api` suffix. Leave `VITE_API_BASE_URL` empty for a same-origin production deployment.
+
+Firebase variables are required only for browser push notifications. The Vite values above are public web-app configuration; keep the Firebase Admin service-account JSON out of this frontend directory and configure its path with `FIREBASE_CREDENTIALS` in the Laravel root `.env`.
 
 The login flow uses Sanctum personal access tokens stored in `sessionStorage` and sent as bearer tokens by `src/lib/api-client.ts`. It does not use cross-origin cookies or the Sanctum CSRF cookie endpoint. For local cross-origin development, set `FRONTEND_URL=http://localhost:5173,http://127.0.0.1:5173` in the Laravel root `.env`; Laravel's CORS configuration allows these frontend origins and the required JSON and authorization headers without enabling credentialed requests. For a separate production frontend origin, set `FRONTEND_URL` to that origin on the API server.
 

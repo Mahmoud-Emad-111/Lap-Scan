@@ -2,6 +2,7 @@
 
 use App\Enums\UserRole;
 use App\Models\Branch;
+use App\Models\Patient;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
@@ -55,4 +56,32 @@ it('returns 401 when a user is not authenticated for private order channels', fu
         'socket_id' => '123.456',
         'channel_name' => "private-branches.{$branch->id}.orders",
     ])->assertUnauthorized();
+});
+
+it('authorizes private patient channels only for the matching patient account', function () {
+    config([
+        'broadcasting.default' => 'reverb',
+        'broadcasting.connections.reverb.key' => 'test-key',
+        'broadcasting.connections.reverb.secret' => 'test-secret',
+        'broadcasting.connections.reverb.app_id' => 'test-app',
+    ]);
+    require base_path('routes/channels.php');
+
+    $patientUser = User::factory()->create();
+    $patientUser->forceFill(['role' => UserRole::Patient])->save();
+    $patient = Patient::factory()->for($patientUser)->create();
+    $otherPatientUser = User::factory()->create();
+    $otherPatientUser->forceFill(['role' => UserRole::Patient])->save();
+    $otherPatient = Patient::factory()->for($otherPatientUser)->create();
+
+    Sanctum::actingAs($patientUser);
+    $this->postJson('/api/broadcasting/auth', [
+        'socket_id' => '123.456',
+        'channel_name' => "private-patients.{$patient->id}",
+    ])->assertOk();
+
+    $this->postJson('/api/broadcasting/auth', [
+        'socket_id' => '123.456',
+        'channel_name' => "private-patients.{$otherPatient->id}",
+    ])->assertForbidden();
 });

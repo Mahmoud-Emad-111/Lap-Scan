@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AppSettingController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BranchController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -8,8 +9,12 @@ use App\Http\Controllers\Api\V1\DoctorPortalController;
 use App\Http\Controllers\Api\V1\DoctorProfileController;
 use App\Http\Controllers\Api\V1\LabResultController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\PatientAddressController;
 use App\Http\Controllers\Api\V1\PatientController;
 use App\Http\Controllers\Api\V1\PatientPortalController;
+use App\Http\Controllers\Api\V1\PatientPromotionController;
+use App\Http\Controllers\Api\V1\PatientReferralController;
+use App\Http\Controllers\Api\V1\PushTokenController;
 use App\Http\Controllers\Api\V1\ReferralDiscountRuleController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SampleController;
@@ -25,14 +30,21 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/me', [AuthController::class, 'show'])->name('me');
         Route::delete('/logout', [AuthController::class, 'destroy'])->name('logout');
+        Route::post('/push-tokens', [PushTokenController::class, 'store'])->name('push-tokens.store');
+        Route::delete('/push-tokens', [PushTokenController::class, 'destroy'])->name('push-tokens.destroy');
         Route::apiResource('branches', BranchController::class)->only(['index', 'store', 'show', 'update']);
         Route::apiResource('patients', PatientController::class)->only(['index', 'store', 'show', 'update']);
         Route::apiResource('tests', TestController::class)->only(['index', 'store', 'show', 'update']);
         Route::get('/dashboard', DashboardController::class)->name('dashboard');
+        Route::get('/settings', [AppSettingController::class, 'show'])->name('settings.show');
+        Route::patch('/settings', [AppSettingController::class, 'update'])->name('settings.update');
         Route::apiResource('users', UserController::class)->only(['index', 'store', 'show', 'update']);
         Route::apiResource('orders', OrderController::class)->only(['index', 'store', 'show']);
         Route::apiResource('referral-discount-rules', ReferralDiscountRuleController::class)
             ->only(['index', 'store', 'update']);
+        Route::apiResource('patient-promotions', PatientPromotionController::class)
+            ->only(['index', 'store', 'update'])
+            ->parameters(['patient-promotions' => 'patientPromotion']);
         Route::get('/doctors', [DoctorController::class, 'index'])->name('doctors.index');
         Route::patch('/doctors/{doctor}/verification', [DoctorController::class, 'updateVerification'])
             ->name('doctors.verification.update');
@@ -60,5 +72,21 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('/reports/operations', ReportController::class)->name('reports.operations');
         Route::get('/patient/orders', [PatientPortalController::class, 'orders'])->name('patient.orders');
         Route::get('/patient/results', [PatientPortalController::class, 'results'])->name('patient.results');
+        Route::get('/patient/profile', [PatientPortalController::class, 'profile'])->name('patient.profile');
+        Route::get('/patient/branches', [PatientPortalController::class, 'branches'])->name('patient.branches');
+        Route::get('/patient/promotions/offers', [PatientPromotionController::class, 'offers'])
+            ->name('patient.promotions.offers');
+        Route::get('/patient/promotions/coupons', [PatientPromotionController::class, 'coupons'])
+            ->name('patient.promotions.coupons');
+        Route::get('/patient/referrals', [PatientReferralController::class, 'show'])
+            ->name('patient.referrals.show');
+        Route::post('/patient/referrals', [PatientReferralController::class, 'store'])
+            ->name('patient.referrals.store');
+        Route::post('/patient/home-collections', [PatientPortalController::class, 'storeHomeCollection'])
+            ->name('patient.home-collections.store');
+        Route::apiResource('patient/addresses', PatientAddressController::class)
+            ->only(['index', 'store', 'update', 'destroy'])
+            ->parameters(['addresses' => 'patientAddress'])
+            ->names('patient.addresses');
     });
 });

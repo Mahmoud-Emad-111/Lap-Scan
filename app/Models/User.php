@@ -51,6 +51,18 @@ class User extends Authenticatable
         return $this->hasOne(Patient::class);
     }
 
+    /** @return HasMany<PatientAddress, $this> */
+    public function patientAddresses(): HasMany
+    {
+        return $this->hasMany(PatientAddress::class);
+    }
+
+    /** @return HasMany<FcmDeviceToken, $this> */
+    public function fcmDeviceTokens(): HasMany
+    {
+        return $this->hasMany(FcmDeviceToken::class);
+    }
+
     /** @return HasOne<DoctorProfile, $this> */
     public function doctorProfile(): HasOne
     {

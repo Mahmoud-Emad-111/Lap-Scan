@@ -1,6 +1,7 @@
 export type WorkflowSection =
     | 'users'
     | 'orders'
+    | 'home-collections'
     | 'samples'
     | 'results'
     | 'reports'
@@ -56,7 +57,7 @@ export type WorkflowRow = {
     role?: UserRole;
     branches?: BranchOption[];
     order_number?: string;
-    source?: 'direct' | 'doctor';
+    source?: 'laboratory' | 'doctor' | 'home_collection';
     patient?: { id: number; full_name: string };
     branch?: { id: number; name: string };
     status?: string;
@@ -70,6 +71,8 @@ export type WorkflowRow = {
     notes?: string | null;
     created_at?: string;
     expected_result_at?: string | null;
+    collection_address?: string | null;
+    collection_requested_at?: string | null;
     items?: OrderItem[];
     barcode?: string;
     specimen_type?: string;
@@ -119,6 +122,7 @@ export type Editor =
 export const titles: Record<WorkflowSection, string> = {
     users: 'المستخدمون والصلاحيات',
     orders: 'طلبات التحاليل',
+    'home-collections': 'طلبات السحب المنزلي',
     samples: 'استلام العينات',
     results: 'النتائج والمراجعة',
     reports: 'التقارير التشغيلية',

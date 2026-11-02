@@ -83,13 +83,37 @@ export function OrderDetailsDialog({
                         </dd>
                     </div>
                     <div className="grid gap-1">
-                        <dt className="text-xs text-slate-500">
-                            الطبيب المحوّل
-                        </dt>
+                        <dt className="text-xs text-slate-500">نوع الطلب</dt>
                         <dd className="text-sm font-semibold text-slate-800">
-                            {order.referring_doctor?.name ?? 'طلب مباشر'}
+                            {order.source === 'home_collection'
+                                ? 'سحب عينة من المنزل'
+                                : order.referring_doctor?.name
+                                  ? `إحالة من ${order.referring_doctor.name}`
+                                  : 'طلب مباشر'}
                         </dd>
                     </div>
+                    {order.collection_requested_at && (
+                        <div className="grid gap-1">
+                            <dt className="text-xs text-slate-500">
+                                الموعد المفضّل للزيارة
+                            </dt>
+                            <dd className="text-sm font-semibold text-slate-800">
+                                {new Date(
+                                    order.collection_requested_at,
+                                ).toLocaleString('ar-EG')}
+                            </dd>
+                        </div>
+                    )}
+                    {order.collection_address && (
+                        <div className="grid gap-1 sm:col-span-2 lg:col-span-3">
+                            <dt className="text-xs text-slate-500">
+                                عنوان سحب العينة
+                            </dt>
+                            <dd className="text-sm font-semibold text-slate-800">
+                                {order.collection_address}
+                            </dd>
+                        </div>
+                    )}
                     <div className="grid gap-1">
                         <dt className="text-xs text-slate-500">الأولوية</dt>
                         <dd className="text-sm font-semibold text-slate-800">

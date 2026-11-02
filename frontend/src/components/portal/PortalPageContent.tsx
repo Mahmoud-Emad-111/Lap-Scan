@@ -36,6 +36,18 @@ const ReferralDiscountRulesPage = lazy(() =>
         }),
     ),
 );
+const PatientPromotionsPage = lazy(() =>
+    import('@/modules/patient-promotions/pages/PatientPromotionsPage').then(
+        (module) => ({
+            default: module.PatientPromotionsPage,
+        }),
+    ),
+);
+const AppSettingsPage = lazy(() =>
+    import('@/modules/settings/pages/AppSettingsPage').then((module) => ({
+        default: module.AppSettingsPage,
+    })),
+);
 
 type CatalogPage = ApiPage<Patient> | ApiPage<LabTest> | ApiPage<Branch> | null;
 
@@ -122,6 +134,14 @@ export function PortalPageContent({
             ) : section === 'referral-discounts' ? (
                 <Suspense fallback={<PageChunkFallback />}>
                     <ReferralDiscountRulesPage token={token} />
+                </Suspense>
+            ) : section === 'patient-promotions' ? (
+                <Suspense fallback={<PageChunkFallback />}>
+                    <PatientPromotionsPage token={token} />
+                </Suspense>
+            ) : section === 'settings' ? (
+                <Suspense fallback={<PageChunkFallback />}>
+                    <AppSettingsPage token={token} />
                 </Suspense>
             ) : isWorkflowSection(section) ? (
                 <Suspense fallback={<PageChunkFallback />}>

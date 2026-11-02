@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\LabResultStatus;
 use App\Enums\UserRole;
 use App\Models\LabResult;
 use App\Models\User;
@@ -28,7 +29,19 @@ class LabResultPolicy
 
     public function downloadDocument(User $user, LabResult $labResult): bool
     {
-        return $labResult->document_path !== null && $this->view($user, $labResult);
+        if ($labResult->document_path === null) {
+            return false;
+        }
+
+        if ($user->role === UserRole::Patient) {
+            return $labResult->status === LabResultStatus::Approved
+                && strtolower(pathinfo((string) $labResult->document_name, PATHINFO_EXTENSION)) === 'pdf'
+                && $user->patientProfile()
+                    ->whereKey($labResult->orderItem->order->patient_id)
+                    ->exists();
+        }
+
+        return $this->view($user, $labResult);
     }
 
     /**

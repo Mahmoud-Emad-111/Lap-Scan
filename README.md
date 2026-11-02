@@ -40,6 +40,13 @@ docker compose exec laravel php artisan db:seed --force
 
 Do not run `migrate:fresh` against a database containing data.
 
+The Compose development services expose the laboratory dashboard at
+`http://localhost:5173` and the separate React patient app at
+`http://localhost:5174`. The patient app is the `app` service; its API requests
+use the existing Laravel/Nginx service. Override `PATIENT_APP_PORT` if port
+5174 is already occupied, and set `PATIENT_APP_API_URL` when the API is not
+available at `http://localhost`.
+
 The demo seeder is intentionally unavailable in production. Provision production users and credentials through a trusted administrative process. The API does not expose public registration or unrestricted role assignment. Supported roles are `patient`, `doctor`, `lab_staff`, and `lab_admin`.
 
 ## Frontend development

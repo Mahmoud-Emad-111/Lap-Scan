@@ -4,11 +4,13 @@ use App\Enums\LabResultStatus;
 use App\Enums\OrderStatus;
 use App\Enums\SampleStatus;
 use App\Enums\UserRole;
+use App\Events\PatientPortalUpdated;
 use App\Models\Branch;
 use App\Models\Order;
 use App\Models\Patient;
 use App\Models\Test as LabTest;
 use App\Models\User;
+use Illuminate\Support\Facades\Event;
 use Laravel\Sanctum\Sanctum;
 
 it('creates an order with price snapshots and one sample per selected test', function () {
@@ -246,18 +248,29 @@ it('publishes patient results only after an authorized result is approved', func
     $patient->user()->associate($patientUser)->save();
     $test = LabTest::factory()->create();
     Sanctum::actingAs($staff);
+    Event::fake([PatientPortalUpdated::class]);
 
     $orderResponse = $this->postJson('/api/v1/orders', [
         'branch_id' => $branch->id,
         'patient_id' => $patient->id,
         'test_ids' => [$test->id],
     ])->assertCreated();
+    Event::assertDispatched(
+        PatientPortalUpdated::class,
+        fn (PatientPortalUpdated $event): bool => $event->broadcastWith()['update_type'] === 'order_created',
+    );
+    Event::assertDispatchedTimes(PatientPortalUpdated::class, 1);
     $orderItemId = $orderResponse->json('data.items.0.id');
     $sampleId = $orderResponse->json('data.items.0.sample.id');
 
     $this->postJson("/api/v1/samples/{$sampleId}/collection")
         ->assertOk()
         ->assertJsonPath('data.status', SampleStatus::Collected->value);
+    Event::assertDispatched(
+        PatientPortalUpdated::class,
+        fn (PatientPortalUpdated $event): bool => $event->broadcastWith()['update_type'] === 'sample_collected',
+    );
+    Event::assertDispatchedTimes(PatientPortalUpdated::class, 2);
 
     $resultResponse = $this->postJson("/api/v1/order-items/{$orderItemId}/result", [
         'value' => 'التجربة ليست نتيجة طبية',
@@ -274,6 +287,12 @@ it('publishes patient results only after an authorized result is approved', func
     $this->postJson("/api/v1/results/{$resultId}/approval")
         ->assertOk()
         ->assertJsonPath('data.status', LabResultStatus::Approved->value);
+    Event::assertDispatched(
+        PatientPortalUpdated::class,
+        fn (PatientPortalUpdated $event): bool => $event->broadcastWith()['update_type'] === 'result_available'
+            && $event->broadcastWith()['order_id'] === $orderResponse->json('data.id'),
+    );
+    Event::assertDispatchedTimes(PatientPortalUpdated::class, 3);
 
     $this->assertDatabaseHas('orders', [
         'id' => $orderResponse->json('data.id'),

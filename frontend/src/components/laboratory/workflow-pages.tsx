@@ -88,6 +88,10 @@ export function WorkflowSectionPage({
     const [busy, setBusy] = useState(false);
     const lastRequestedUrl = useRef<string | undefined>(undefined);
     const lastHandledRealtimeRevision = useRef(orderRealtimeRevision);
+    const isOrderSection =
+        section === 'orders' || section === 'home-collections';
+    const homeCollectionSource =
+        section === 'home-collections' ? 'home_collection' : undefined;
 
     useEffect(() => {
         return () => {
@@ -98,7 +102,7 @@ export function WorkflowSectionPage({
     }, [documentPreview]);
 
     useEffect(() => {
-        if (section !== 'orders') {
+        if (!isOrderSection) {
             return;
         }
 
@@ -127,7 +131,7 @@ export function WorkflowSectionPage({
         return () => {
             cancelled = true;
         };
-    }, [section, token]);
+    }, [isOrderSection, section, token]);
 
     const loadPage = useCallback(
         async (url?: string) => {
@@ -164,7 +168,7 @@ export function WorkflowSectionPage({
     useEffect(() => {
         setQuery(initialOrderSearch ?? '');
 
-        if (section === 'orders' && initialOrderSearch) {
+        if (isOrderSection && initialOrderSearch) {
             setPriorityFilter('');
             setOrderStatusFilter('');
             setBranchFilter('');
@@ -173,23 +177,26 @@ export function WorkflowSectionPage({
         }
 
         void loadPage(
-            section === 'orders' && initialOrderSearch
-                ? getWorkflowOrdersUrl({ search: initialOrderSearch })
+            isOrderSection && initialOrderSearch
+                ? getWorkflowOrdersUrl(
+                      { search: initialOrderSearch },
+                      homeCollectionSource,
+                  )
                 : undefined,
         );
-    }, [initialOrderSearch, loadPage, section]);
+    }, [homeCollectionSource, initialOrderSearch, isOrderSection, loadPage]);
 
     useEffect(() => {
         if (
-            section === 'orders' &&
+            isOrderSection &&
             lastHandledRealtimeRevision.current !== orderRealtimeRevision
         ) {
             lastHandledRealtimeRevision.current = orderRealtimeRevision;
             void loadPage(lastRequestedUrl.current);
-        } else if (section !== 'orders') {
+        } else if (!isOrderSection) {
             lastHandledRealtimeRevision.current = orderRealtimeRevision;
         }
-    }, [loadPage, orderRealtimeRevision, section]);
+    }, [isOrderSection, loadPage, orderRealtimeRevision]);
 
     const filteredRows = useMemo(() => {
         let rows = page?.data ?? [];
@@ -202,7 +209,7 @@ export function WorkflowSectionPage({
                         .includes(query.toLocaleLowerCase('ar')),
                 ),
             );
-        } else if (query && section !== 'orders') {
+        } else if (query && !isOrderSection) {
             rows = rows.filter((row) =>
                 JSON.stringify(row)
                     .toLocaleLowerCase('ar')
@@ -215,7 +222,7 @@ export function WorkflowSectionPage({
         }
 
         return rows;
-    }, [page, query, sampleStatusFilter, section]);
+    }, [isOrderSection, page, query, sampleStatusFilter, section]);
 
     const searchPatients = useCallback(
         (search: string) => fetchPatientOptions(token, search),
@@ -226,7 +233,9 @@ export function WorkflowSectionPage({
         return {
             ...(query.trim() ? { search: query.trim() } : {}),
             ...(orderStatusFilter ? { status: orderStatusFilter } : {}),
-            ...(priorityFilter ? { priority: priorityFilter } : {}),
+            ...(section === 'orders' && priorityFilter
+                ? { priority: priorityFilter }
+                : {}),
             ...(branchFilter ? { branch_id: branchFilter } : {}),
             ...(dateFromFilter ? { from: dateFromFilter } : {}),
             ...(dateToFilter ? { to: dateToFilter } : {}),
@@ -234,7 +243,9 @@ export function WorkflowSectionPage({
     }
 
     function applyOrderFilters() {
-        void loadPage(getWorkflowOrdersUrl(orderFilters()));
+        void loadPage(
+            getWorkflowOrdersUrl(orderFilters(), homeCollectionSource),
+        );
     }
 
     function clearOrderFilters() {
@@ -244,7 +255,7 @@ export function WorkflowSectionPage({
         setPriorityFilter('');
         setDateFromFilter('');
         setDateToFilter('');
-        void loadPage(getWorkflowOrdersUrl());
+        void loadPage(getWorkflowOrdersUrl({}, homeCollectionSource));
     }
 
     async function openUserEditor(user?: WorkflowRow) {
@@ -497,8 +508,8 @@ export function WorkflowSectionPage({
                     : 'تم حفظ البيانات بنجاح.',
             );
             await loadPage(
-                section === 'orders'
-                    ? getWorkflowOrdersUrl(orderFilters())
+                isOrderSection
+                    ? getWorkflowOrdersUrl(orderFilters(), homeCollectionSource)
                     : undefined,
             );
         } catch (requestError) {
@@ -645,9 +656,11 @@ export function WorkflowSectionPage({
                     ? 'لإضافة نتيجة جديدة، أنشئ طلب تحليل ثم سجّل استلام عينته. بعدها يمكنك إدخال القيمة يدويًا وإرفاق تقرير PDF أو صورة للمراجعة.'
                     : section === 'samples'
                       ? 'راجع العينات المسجلة، وتابع حالتها، وسجّل استلامها عند وصولها إلى المختبر.'
-                      : section === 'patient-results'
-                        ? 'تظهر هنا النتائج التي اعتمدها المختبر فقط.'
-                        : 'تعرض البيانات التي يسمح بها دور حسابك من خلال واجهة الـAPI.'
+                      : section === 'home-collections'
+                        ? 'راجع طلبات الزيارات المنزلية، وابحث بعنوان المريض أو رقم الطلب، وتأكد من الموعد المفضّل قبل التواصل مع المريض.'
+                        : section === 'patient-results'
+                          ? 'تظهر هنا النتائج التي اعتمدها المختبر فقط.'
+                          : 'تعرض البيانات التي يسمح بها دور حسابك من خلال واجهة الـAPI.'
             }
             action={addAction}
         >
@@ -679,7 +692,7 @@ export function WorkflowSectionPage({
                 <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_8px_24px_-22px_rgba(20,54,49,0.35)] sm:flex-row sm:items-center sm:justify-between sm:p-4">
                     <div
                         className={`flex min-w-0 flex-1 flex-col gap-3 ${
-                            section === 'orders'
+                            isOrderSection
                                 ? 'sm:grid sm:grid-cols-2 lg:grid-cols-3'
                                 : 'sm:flex-row sm:items-center'
                         }`}
@@ -712,7 +725,7 @@ export function WorkflowSectionPage({
                                 }
                                 onKeyDown={(event) => {
                                     if (
-                                        section === 'orders' &&
+                                        isOrderSection &&
                                         event.key === 'Enter'
                                     ) {
                                         event.preventDefault();
@@ -724,7 +737,7 @@ export function WorkflowSectionPage({
                                         ? 'ابحث بالباركود أو المريض أو التحليل'
                                         : `بحث في ${titles[section]}`
                                 }
-                                className={`${inputClass} pr-10 ${section === 'orders' ? '' : 'sm:max-w-md'}`}
+                                className={`${inputClass} pr-10 ${isOrderSection ? '' : 'sm:max-w-md'}`}
                             />
                         </div>
                         {section === 'samples' && (
@@ -757,7 +770,7 @@ export function WorkflowSectionPage({
                                 <option value="normal">الطلبات العادية</option>
                             </select>
                         )}
-                        {section === 'orders' && (
+                        {isOrderSection && (
                             <>
                                 <select
                                     value={branchFilter}

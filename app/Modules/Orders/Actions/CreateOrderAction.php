@@ -5,11 +5,14 @@ namespace App\Modules\Orders\Actions;
 use App\Enums\OrderPriority;
 use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
+use App\Events\HomeCollectionRequested;
+use App\Events\PatientPortalUpdated;
 use App\Models\Branch;
 use App\Models\Order;
 use App\Models\Patient;
 use App\Models\Test;
 use App\Models\User;
+use App\Modules\Promotions\Actions\ResolvePatientPromotionAction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -19,10 +22,11 @@ class CreateOrderAction
     public function __construct(
         private readonly ApplyReferralDiscountAction $applyReferralDiscount,
         private readonly ResolveReferralDiscountRuleAction $resolveDiscountRule,
+        private readonly ResolvePatientPromotionAction $resolvePatientPromotion,
     ) {}
 
     /**
-     * @param  array{patient_id?: int|null, patient_full_name?: string, patient_phone?: string, patient_email?: string|null, patient_date_of_birth?: string|null, patient_gender?: string|null, branch_id: int, test_ids: list<int>, notes?: string|null, referring_doctor_id?: int|null, source?: OrderSource, priority?: OrderPriority, urgent_reason?: string|null, request_key?: string|null}  $attributes
+     * @param  array{patient_id?: int|null, patient_full_name?: string, patient_phone?: string, patient_email?: string|null, patient_date_of_birth?: string|null, patient_gender?: string|null, branch_id: int, test_ids: list<int>, notes?: string|null, referring_doctor_id?: int|null, source?: OrderSource, priority?: OrderPriority, urgent_reason?: string|null, request_key?: string|null, collection_address?: string|null, collection_requested_at?: string|null, promotion_id?: int|null, coupon_code?: string|null}  $attributes
      * @param  array{doctor: User, branch: Branch, is_first_referral: bool}|null  $discountContext
      */
     public function handle(
@@ -78,13 +82,23 @@ class CreateOrderAction
                     $discountContext['is_first_referral'],
                     $subtotalInCents,
                 );
-            $discountInCents = $discountRule === null
-                ? 0
-                : $this->applyReferralDiscount->handle($discountRule, $subtotalInCents);
+            $patientPromotion = $discountContext === null
+                && (isset($attributes['promotion_id']) || isset($attributes['coupon_code']))
+                    ? $this->resolvePatientPromotion->handle(
+                        $attributes['promotion_id'] ?? null,
+                        $attributes['coupon_code'] ?? null,
+                        Patient::query()->findOrFail($patientId),
+                        $attributes['test_ids'],
+                        $subtotalInCents,
+                    )
+                    : null;
+            $patientPromotionRecord = $patientPromotion['promotion'] ?? null;
+            $discountInCents = $discountRule !== null
+                ? $this->applyReferralDiscount->handle($discountRule, $subtotalInCents)
+                : ($patientPromotion['discount_in_cents'] ?? 0);
             $totalInCents = $subtotalInCents - $discountInCents;
-            $discountSnapshot = $discountRule === null
-                ? null
-                : [
+            $discountSnapshot = $discountRule !== null
+                ? [
                     'rule_id' => $discountRule->id,
                     'name' => $discountRule->name,
                     'discount_type' => $discountRule->discount_type->value,
@@ -94,7 +108,21 @@ class CreateOrderAction
                     'referral_scope' => $discountRule->referral_scope->value,
                     'discount_amount' => number_format($discountInCents / 100, 2, '.', ''),
                     'applied_at' => now()->toISOString(),
-                ];
+                ]
+                : ($patientPromotionRecord === null
+                    ? null
+                    : [
+                        'promotion_id' => $patientPromotionRecord->id,
+                        'kind' => $patientPromotionRecord->kind->value,
+                        'name' => $patientPromotionRecord->name,
+                        'code' => $patientPromotionRecord->code,
+                        'discount_type' => $patientPromotionRecord->discount_type->value,
+                        'discount_value' => $patientPromotionRecord->discount_value,
+                        'minimum_subtotal' => $patientPromotionRecord->minimum_subtotal,
+                        'maximum_discount' => $patientPromotionRecord->maximum_discount,
+                        'discount_amount' => number_format($discountInCents / 100, 2, '.', ''),
+                        'applied_at' => now()->toISOString(),
+                    ]);
 
             $order = Order::query()->create([
                 'order_number' => 'LAB-'.now()->format('Ymd').'-'.Str::upper((string) Str::ulid()),
@@ -112,6 +140,9 @@ class CreateOrderAction
                 'discount_amount' => number_format($discountInCents / 100, 2, '.', ''),
                 'discount_rule_id' => $discountRule?->id,
                 'discount_snapshot' => $discountSnapshot,
+                'patient_promotion_id' => $patientPromotionRecord?->id,
+                'collection_address' => $attributes['collection_address'] ?? null,
+                'collection_requested_at' => $attributes['collection_requested_at'] ?? null,
                 'total' => number_format($totalInCents / 100, 2, '.', ''),
             ]);
 
@@ -136,6 +167,24 @@ class CreateOrderAction
                     'barcode' => $order->order_number.'-'.$item->id,
                     'specimen_type' => $test->specimen_type,
                 ]);
+            }
+
+            if ($patientPromotionRecord !== null) {
+                $patientPromotionRecord->increment('used_count');
+                $patientPromotionRecord->redemptions()->create([
+                    'patient_id' => $patientId,
+                    'order_id' => $order->id,
+                    'discount_amount' => number_format($discountInCents / 100, 2, '.', ''),
+                ]);
+            }
+
+            PatientPortalUpdated::dispatch(
+                $order,
+                $order->source === OrderSource::HomeCollection ? 'home_collection_created' : 'order_created',
+            );
+
+            if ($order->source === OrderSource::HomeCollection) {
+                HomeCollectionRequested::dispatch($order);
             }
 
             return $order->load(['branch', 'patient', 'referringDoctor', 'items.sample', 'items.test']);

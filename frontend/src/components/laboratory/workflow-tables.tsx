@@ -91,7 +91,11 @@ export function WorkflowTable({
         );
     }
 
-    if (section === 'orders' || section === 'patient-orders') {
+    if (
+        section === 'orders' ||
+        section === 'home-collections' ||
+        section === 'patient-orders'
+    ) {
         return (
             <DataTable
                 headings={[
@@ -99,11 +103,14 @@ export function WorkflowTable({
                     'المريض',
                     'الفرع',
                     'التحاليل',
+                    ...(section === 'home-collections'
+                        ? ['موعد الزيارة والعنوان']
+                        : []),
                     'الحالة',
-                    'الأولوية',
+                    ...(section !== 'home-collections' ? ['الأولوية'] : []),
                     'الإجمالي',
                     'التاريخ',
-                    ...(section === 'orders' ? ['الإجراءات'] : []),
+                    ...(section !== 'patient-orders' ? ['الإجراءات'] : []),
                 ]}
             >
                 {rows.map((order) => (
@@ -118,26 +125,43 @@ export function WorkflowTable({
                                 ?.map((item) => item.test_name)
                                 .join('، ')}
                         </TableCell>
+                        {section === 'home-collections' && (
+                            <TableCell>
+                                <span className="block font-medium text-slate-800">
+                                    {order.collection_requested_at
+                                        ? new Date(
+                                              order.collection_requested_at,
+                                          ).toLocaleString('ar-EG')
+                                        : 'موعد غير محدد'}
+                                </span>
+                                <span className="mt-1 block max-w-xs text-xs leading-5 text-slate-500">
+                                    {order.collection_address ??
+                                        'عنوان غير متاح'}
+                                </span>
+                            </TableCell>
+                        )}
                         <TableCell>
                             <StatusBadge status={order.status} />
                         </TableCell>
-                        <TableCell>
-                            {order.priority === 'urgent' ? (
-                                <span
-                                    title={order.urgent_reason ?? ''}
-                                    className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
-                                >
-                                    عاجل
-                                </span>
-                            ) : (
-                                'عادي'
-                            )}
-                            {order.referring_doctor && (
-                                <span className="mt-1 block text-xs text-slate-500">
-                                    إحالة: {order.referring_doctor.name}
-                                </span>
-                            )}
-                        </TableCell>
+                        {section !== 'home-collections' && (
+                            <TableCell>
+                                {order.priority === 'urgent' ? (
+                                    <span
+                                        title={order.urgent_reason ?? ''}
+                                        className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                                    >
+                                        عاجل
+                                    </span>
+                                ) : (
+                                    'عادي'
+                                )}
+                                {order.referring_doctor && (
+                                    <span className="mt-1 block text-xs text-slate-500">
+                                        إحالة: {order.referring_doctor.name}
+                                    </span>
+                                )}
+                            </TableCell>
+                        )}
                         <TableCell>
                             {order.total ? (
                                 <>
@@ -168,7 +192,7 @@ export function WorkflowTable({
                                   )
                                 : '—'}
                         </TableCell>
-                        {section === 'orders' && (
+                        {section !== 'patient-orders' && (
                             <TableCell>
                                 <ActionButton
                                     label="عرض الطلب"

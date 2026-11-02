@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $subtotal
  * @property string $discount_amount
  * @property int|null $discount_rule_id
+ * @property int|null $patient_promotion_id
  * @property array{rule_id: int, name: string, discount_type: string, discount_value: string, minimum_subtotal: string|null, maximum_discount: string|null, referral_scope: string, discount_amount: string, applied_at: string}|null $discount_snapshot
  * @property string $total
  */
@@ -56,6 +57,9 @@ class Order extends Model
         'discount_amount',
         'discount_rule_id',
         'discount_snapshot',
+        'patient_promotion_id',
+        'collection_address',
+        'collection_requested_at',
         'total',
     ];
 
@@ -89,6 +93,12 @@ class Order extends Model
         return $this->belongsTo(ReferralDiscountRule::class);
     }
 
+    /** @return BelongsTo<PatientPromotion, $this> */
+    public function patientPromotion(): BelongsTo
+    {
+        return $this->belongsTo(PatientPromotion::class);
+    }
+
     /** @return HasMany<OrderItem, $this> */
     public function items(): HasMany
     {
@@ -104,6 +114,7 @@ class Order extends Model
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'discount_snapshot' => 'array',
+            'collection_requested_at' => 'datetime',
             'total' => 'decimal:2',
         ];
     }

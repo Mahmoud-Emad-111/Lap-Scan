@@ -8,6 +8,7 @@ import {
     login,
     logout,
 } from '@/modules/auth/services/authApi';
+import { unregisterFirebasePush } from '@/modules/notifications/services/firebasePush';
 import type { AuthUser } from '@/modules/auth/types';
 
 const TOKEN_KEY = 'lab-portal-token';
@@ -91,6 +92,12 @@ export function usePortalAuth() {
 
     async function handleLogout() {
         if (token) {
+            try {
+                await unregisterFirebasePush(token);
+            } catch {
+                showErrorNotice('تعذّر إزالة إشعارات هذا المتصفح من الخادم.');
+            }
+
             try {
                 await logout(token);
             } catch {

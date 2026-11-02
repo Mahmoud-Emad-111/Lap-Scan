@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\Patient;
 use App\Models\Test as LabTest;
 use App\Models\User;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 it('does not expose another patient result through the patient portal', function () {
@@ -60,4 +61,54 @@ it('returns 403 when a patient requests an order containing an unapproved result
     Sanctum::actingAs($patientUser);
 
     $this->getJson("/api/v1/orders/{$order->id}")->assertForbidden();
+});
+
+it('lets a patient download only their own approved PDF result', function () {
+    $patientUser = User::factory()->create();
+    $patientUser->forceFill(['role' => UserRole::Patient])->save();
+    $patient = Patient::factory()->for($patientUser)->create();
+    $ownedOrder = Order::factory()->create([
+        'patient_id' => $patient->id,
+        'branch_id' => Branch::factory(),
+    ]);
+    $ownedItem = OrderItem::factory()->for($ownedOrder)->create([
+        'test_id' => LabTest::factory(),
+    ]);
+    $ownedResult = LabResult::factory()->for($ownedItem)->create([
+        'status' => LabResultStatus::Approved,
+        'approved_at' => now(),
+        'document_path' => 'lab-results/patient-report.pdf',
+        'document_name' => 'patient-report.pdf',
+        'document_size' => 14,
+    ]);
+    $otherPatient = Patient::factory()->create();
+    $otherOrder = Order::factory()->create([
+        'patient_id' => $otherPatient->id,
+        'branch_id' => Branch::factory(),
+    ]);
+    $otherItem = OrderItem::factory()->for($otherOrder)->create([
+        'test_id' => LabTest::factory(),
+    ]);
+    $otherResult = LabResult::factory()->for($otherItem)->create([
+        'status' => LabResultStatus::Approved,
+        'approved_at' => now(),
+        'document_path' => 'lab-results/other-report.pdf',
+        'document_name' => 'other-report.pdf',
+        'document_size' => 14,
+    ]);
+    Storage::fake('local');
+    Storage::disk('local')->put($ownedResult->document_path, "%PDF-1.4\n%%EOF");
+    Storage::disk('local')->put($otherResult->document_path, "%PDF-1.4\n%%EOF");
+    Sanctum::actingAs($patientUser);
+
+    $this->getJson('/api/v1/patient/results')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $ownedResult->id)
+        ->assertJsonPath('data.0.has_pdf', true)
+        ->assertJsonMissingPath('data.0.document_path');
+    $this->get("/api/v1/results/{$ownedResult->id}/document")
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+    $this->get("/api/v1/results/{$otherResult->id}/document")->assertNotFound();
 });

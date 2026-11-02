@@ -16,6 +16,8 @@ class PatientResultResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $documentExtension = strtolower(pathinfo((string) $this->document_name, PATHINFO_EXTENSION));
+
         return [
             'id' => $this->id,
             'order_number' => $this->orderItem->order->displayNumber(),
@@ -24,6 +26,7 @@ class PatientResultResource extends JsonResource
             'unit' => $this->unit,
             'reference_range' => $this->reference_range,
             'approved_at' => $this->approved_at?->toISOString(),
+            'has_pdf' => $this->document_path !== null && $documentExtension === 'pdf',
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\OrderSource;
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\StoreOrderRequest;
@@ -25,6 +26,7 @@ class OrderController extends Controller
         $filters = $request->validate([
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'nullable', Rule::enum(OrderStatus::class)],
+            'source' => ['sometimes', 'nullable', Rule::enum(OrderSource::class)],
             'priority' => ['sometimes', 'nullable', Rule::in(['normal', 'urgent'])],
             'branch_id' => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
             'from' => ['sometimes', 'nullable', 'date'],
@@ -43,6 +45,7 @@ class OrderController extends Controller
             )
             ->when(isset($filters['priority']), fn ($query) => $query->where('priority', $filters['priority']))
             ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
+            ->when(isset($filters['source']), fn ($query) => $query->where('source', $filters['source']))
             ->when(isset($filters['branch_id']), fn ($query) => $query->where('branch_id', $filters['branch_id']))
             ->when(isset($filters['from']), fn ($query) => $query->whereDate('created_at', '>=', $filters['from']))
             ->when(isset($filters['to']), fn ($query) => $query->whereDate('created_at', '<=', $filters['to']))

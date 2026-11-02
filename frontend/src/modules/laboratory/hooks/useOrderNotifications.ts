@@ -4,13 +4,21 @@ import { fetchRealtimeBranchIds } from '@/modules/laboratory/services/laboratory
 import {
     claimOrderNotification,
     createOrderEcho,
+    getHomeCollectionRequestedPayload,
+    getOrderNotificationStorageKey,
     getOrderNotifications,
     isDoctorReferralCreatedPayload,
     markOrderNotificationsAsRead,
-    rememberDoctorReferralNotification,
+    rememberOrderNotification,
     type RealtimeConnectionStatus,
-    type StoredDoctorReferralNotification,
+    type StoredOrderNotification,
 } from '@/modules/laboratory/services/orderRealtime';
+import {
+    hasSavedFirebasePushToken,
+    isFirebasePushConfigured,
+    registerFirebasePush,
+    unregisterFirebasePush,
+} from '@/modules/notifications/services/firebasePush';
 import type { AuthUser } from '@/modules/auth/types';
 
 type UseOrderNotificationsOptions = {
@@ -26,17 +34,44 @@ export function useOrderNotifications({
 }: UseOrderNotificationsOptions) {
     const { showNotice, showSuccessNotice } = useNotifications();
     const [notifications, setNotifications] = useState<
-        StoredDoctorReferralNotification[]
+        StoredOrderNotification[]
     >([]);
     const [realtimeRevision, setRealtimeRevision] = useState(0);
     const [realtimeStatus, setRealtimeStatus] =
         useState<RealtimeConnectionStatus>('disconnected');
     const [soundEnabled, setSoundEnabled] = useState(false);
+    const [firebasePushEnabled, setFirebasePushEnabled] = useState(false);
+    const [firebasePushBusy, setFirebasePushBusy] = useState(false);
     const soundEnabledRef = useRef(false);
     const seenOrderIdsRef = useRef(new Set<number>());
     const audioContextRef = useRef<AudioContext | null>(null);
+    const firebaseMessageUnsubscribeRef = useRef<(() => void) | null>(null);
 
     soundEnabledRef.current = soundEnabled;
+
+    const showIncomingOrderNotice = useCallback(
+        (message: string) => {
+            const audioContext = audioContextRef.current;
+
+            if (soundEnabledRef.current && audioContext?.state === 'running') {
+                const oscillator = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                const soundStart = audioContext.currentTime;
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, soundStart);
+                gain.gain.setValueAtTime(0.08, soundStart);
+                gain.gain.exponentialRampToValueAtTime(0.001, soundStart + 0.2);
+                oscillator.connect(gain);
+                gain.connect(audioContext.destination);
+                oscillator.start(soundStart);
+                oscillator.stop(soundStart + 0.9);
+            }
+
+            showNotice(message);
+        },
+        [showNotice],
+    );
 
     const handleDoctorReferralCreated = useCallback(
         async (payload: unknown, subscribedBranchId: number) => {
@@ -54,9 +89,10 @@ export function useOrderNotifications({
             if (user?.id) {
                 try {
                     setNotifications(
-                        await rememberDoctorReferralNotification(
+                        await rememberOrderNotification(
                             user.id,
                             payload,
+                            'doctor_referral',
                         ),
                     );
                 } catch (storageError) {
@@ -81,32 +117,65 @@ export function useOrderNotifications({
                 );
             }
 
-            const message = `إحالة جديدة للمعمل برقم ${payload.order_number}.`;
-            const audioContext = audioContextRef.current;
-
-            if (soundEnabledRef.current && audioContext?.state === 'running') {
-                const oscillator = audioContext.createOscillator();
-                const gain = audioContext.createGain();
-                const soundStart = audioContext.currentTime;
-
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(880, soundStart);
-                gain.gain.setValueAtTime(0.08, soundStart);
-                gain.gain.exponentialRampToValueAtTime(0.001, soundStart + 0.2);
-                oscillator.connect(gain);
-                gain.connect(audioContext.destination);
-                oscillator.start(soundStart);
-                oscillator.stop(soundStart + 0.9);
-                showNotice(message);
-            } else if (soundEnabledRef.current) {
-                showNotice(
-                    `${message} اضغط «تفعيل الصوت» للسماح بالتنبيه الصوتي.`,
-                );
-            } else {
-                showNotice(message);
-            }
+            showIncomingOrderNotice(
+                `إحالة جديدة للمعمل برقم ${payload.order_number}.`,
+            );
         },
-        [showNotice, user?.id],
+        [showIncomingOrderNotice, showNotice, user?.id],
+    );
+
+    const handleHomeCollectionRequested = useCallback(
+        async (payload: unknown, subscribedBranchId?: number) => {
+            const request = getHomeCollectionRequestedPayload(payload);
+
+            if (
+                !request ||
+                (subscribedBranchId !== undefined &&
+                    request.branch_id !== subscribedBranchId) ||
+                seenOrderIdsRef.current.has(request.order_id)
+            ) {
+                return;
+            }
+
+            seenOrderIdsRef.current.add(request.order_id);
+            setRealtimeRevision((revision) => revision + 1);
+
+            if (user?.id) {
+                try {
+                    setNotifications(
+                        await rememberOrderNotification(
+                            user.id,
+                            request,
+                            'home_collection',
+                        ),
+                    );
+                } catch (storageError) {
+                    console.error(
+                        'Unable to save the home collection notification.',
+                        storageError,
+                    );
+                    showNotice(
+                        'وصل طلب سحب منزلي جديد، لكن تعذّر حفظه في قائمة الإشعارات.',
+                    );
+                }
+            }
+
+            try {
+                if (!(await claimOrderNotification(request.order_id))) {
+                    return;
+                }
+            } catch (notificationError) {
+                console.error(
+                    'Unable to deduplicate a home collection notification across tabs.',
+                    notificationError,
+                );
+            }
+
+            showIncomingOrderNotice(
+                `طلب سحب منزلي جديد للمعمل برقم ${request.order_number}.`,
+            );
+        },
+        [showIncomingOrderNotice, showNotice, user?.id],
     );
 
     useEffect(() => {
@@ -117,13 +186,13 @@ export function useOrderNotifications({
         }
 
         const userId = user.id;
-        const storageKey = `lab-doctor-referral-notifications:${userId}`;
+        const storageKey = getOrderNotificationStorageKey(userId);
 
         try {
             setNotifications(getOrderNotifications(userId));
         } catch (storageError) {
             console.error(
-                'Unable to read doctor referral notifications.',
+                'Unable to read laboratory notifications.',
                 storageError,
             );
             showNotice('تعذّر تحميل قائمة الإشعارات المحفوظة.', 'error');
@@ -138,7 +207,7 @@ export function useOrderNotifications({
                 setNotifications(getOrderNotifications(userId));
             } catch (storageError) {
                 console.error(
-                    'Unable to synchronize doctor referral notifications.',
+                    'Unable to synchronize laboratory notifications.',
                     storageError,
                 );
                 showNotice(
@@ -188,6 +257,131 @@ export function useOrderNotifications({
     useEffect(() => {
         if (
             !token ||
+            (user?.role !== 'lab_admin' && user?.role !== 'lab_staff') ||
+            !isFirebasePushConfigured() ||
+            typeof Notification === 'undefined' ||
+            Notification.permission !== 'granted'
+        ) {
+            setFirebasePushEnabled(false);
+
+            return;
+        }
+
+        try {
+            if (!hasSavedFirebasePushToken()) {
+                setFirebasePushEnabled(false);
+
+                return;
+            }
+        } catch (storageError) {
+            console.error(
+                'Unable to read the Firebase push registration.',
+                storageError,
+            );
+            showNotice('تعذّر قراءة إعداد إشعارات المتصفح.', 'error');
+
+            return;
+        }
+
+        let cancelled = false;
+        let unsubscribe: (() => void) | undefined;
+
+        void registerFirebasePush(token, (data) => {
+            if (data?.type === 'home_collection_requested') {
+                void handleHomeCollectionRequested(data);
+            }
+        })
+            .then((stopListening) => {
+                if (cancelled) {
+                    stopListening();
+
+                    return;
+                }
+
+                unsubscribe = stopListening;
+                firebaseMessageUnsubscribeRef.current?.();
+                firebaseMessageUnsubscribeRef.current = stopListening;
+                setFirebasePushEnabled(true);
+            })
+            .catch((registrationError: unknown) => {
+                if (!cancelled) {
+                    console.error(
+                        'Unable to restore Firebase push notifications.',
+                        registrationError,
+                    );
+                    setFirebasePushEnabled(false);
+                    showNotice(
+                        registrationError instanceof Error
+                            ? registrationError.message
+                            : 'تعذّر استعادة إشعارات Firebase.',
+                        'error',
+                    );
+                }
+            });
+
+        return () => {
+            cancelled = true;
+            unsubscribe?.();
+            if (firebaseMessageUnsubscribeRef.current === unsubscribe) {
+                firebaseMessageUnsubscribeRef.current = null;
+            }
+        };
+    }, [handleHomeCollectionRequested, showNotice, token, user?.role]);
+
+    const toggleFirebasePushNotifications = useCallback(async () => {
+        if (!token || firebasePushBusy) {
+            return;
+        }
+
+        setFirebasePushBusy(true);
+
+        try {
+            if (firebasePushEnabled) {
+                await unregisterFirebasePush(token);
+                firebaseMessageUnsubscribeRef.current?.();
+                firebaseMessageUnsubscribeRef.current = null;
+                setFirebasePushEnabled(false);
+                showNotice('تم إيقاف إشعارات المتصفح.');
+            } else {
+                const stopListening = await registerFirebasePush(
+                    token,
+                    (data) => {
+                        if (data?.type === 'home_collection_requested') {
+                            void handleHomeCollectionRequested(data);
+                        }
+                    },
+                );
+                firebaseMessageUnsubscribeRef.current?.();
+                firebaseMessageUnsubscribeRef.current = stopListening;
+                setFirebasePushEnabled(true);
+                showSuccessNotice('تم تفعيل إشعارات المتصفح بالخلفية.');
+            }
+        } catch (pushError: unknown) {
+            console.error(
+                'Unable to update Firebase push notifications.',
+                pushError,
+            );
+            showNotice(
+                pushError instanceof Error
+                    ? pushError.message
+                    : 'تعذّر تحديث إشعارات المتصفح.',
+                'error',
+            );
+        } finally {
+            setFirebasePushBusy(false);
+        }
+    }, [
+        firebasePushBusy,
+        firebasePushEnabled,
+        handleHomeCollectionRequested,
+        showNotice,
+        showSuccessNotice,
+        token,
+    ]);
+
+    useEffect(() => {
+        if (
+            !token ||
             (user?.role !== 'lab_admin' && user?.role !== 'lab_staff')
         ) {
             setRealtimeStatus('disconnected');
@@ -232,6 +426,12 @@ export function useOrderNotifications({
                         void handleDoctorReferralCreated(payload, branchId);
                     },
                 );
+                echo.private(`branches.${branchId}.orders`).listen(
+                    '.home.collection.requested',
+                    (payload: unknown) => {
+                        void handleHomeCollectionRequested(payload, branchId);
+                    },
+                );
             }
 
             setRealtimeRevision((revision) => revision + 1);
@@ -259,7 +459,13 @@ export function useOrderNotifications({
             echo?.leaveAllChannels();
             echo?.disconnect();
         };
-    }, [handleDoctorReferralCreated, showNotice, token, user?.role]);
+    }, [
+        handleDoctorReferralCreated,
+        handleHomeCollectionRequested,
+        showNotice,
+        token,
+        user?.role,
+    ]);
 
     useEffect(() => {
         return () => {
@@ -352,7 +558,11 @@ export function useOrderNotifications({
         realtimeRevision,
         realtimeStatus,
         soundEnabled,
+        firebasePushEnabled,
+        firebasePushBusy,
+        firebasePushAvailable: isFirebasePushConfigured(),
         markNotificationsAsRead,
         toggleSoundNotifications,
+        toggleFirebasePushNotifications,
     };
 }

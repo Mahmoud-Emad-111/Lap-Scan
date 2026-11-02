@@ -18,3 +18,9 @@ Broadcast::channel(
             );
     },
 );
+
+Broadcast::channel(
+    'patients.{patient}',
+    fn (User $user, int|string $patient): bool => $user->role === UserRole::Patient
+        && $user->patientProfile()->whereKey($patient)->exists(),
+);

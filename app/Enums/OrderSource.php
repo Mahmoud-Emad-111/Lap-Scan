@@ -6,4 +6,5 @@ enum OrderSource: string
 {
     case Laboratory = 'laboratory';
     case Doctor = 'doctor';
+    case HomeCollection = 'home_collection';
 }

@@ -4,6 +4,7 @@ namespace App\Modules\Samples\Actions;
 
 use App\Enums\OrderStatus;
 use App\Enums\SampleStatus;
+use App\Events\PatientPortalUpdated;
 use App\Models\Sample;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,6 +45,8 @@ class CollectSampleAction
             if ($hasSamples && ! $hasItemsWithoutCollectedSamples) {
                 $order->update(['status' => OrderStatus::Processing]);
             }
+
+            PatientPortalUpdated::dispatch($order, 'sample_collected');
 
             return $sample->refresh();
         });
