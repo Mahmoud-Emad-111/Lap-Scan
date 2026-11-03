@@ -76,7 +76,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                         role={tone === 'error' ? 'alert' : 'status'}
                         aria-live={tone === 'error' ? 'assertive' : 'polite'}
                         aria-atomic="true"
-                        className="notification-island pointer-events-auto flex w-full max-w-[26rem] items-center gap-3 rounded-[1.65rem] border border-white/10 bg-[#151b1a]/95 px-4 py-3.5 text-white shadow-[0_20px_60px_-18px_rgba(2,20,17,0.65)] backdrop-blur-xl"
+                        className={`notification-island pointer-events-auto flex w-full max-w-[26rem] items-center gap-3 rounded-2xl border bg-brand-600 px-4 py-3.5 text-white shadow-[0_16px_44px_-18px_rgba(20,54,49,0.38)] backdrop-blur-xl ${getNoticeToneClass(tone)}`}
                     >
                         <span
                             className={`grid size-10 shrink-0 place-items-center rounded-full ${getIconTone(tone)}`}
@@ -84,7 +84,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                             <NoticeIcon tone={tone} />
                         </span>
                         <span className="grid min-w-0 flex-1 gap-0.5">
-                            <span className="text-xs font-bold text-white/65">
+                            <span className="text-xs font-bold text-white/75">
                                 {getTitle(tone)}
                             </span>
                             <span className="text-sm leading-5 font-medium text-white">
@@ -95,7 +95,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                             type="button"
                             aria-label="إغلاق الإشعار"
                             onClick={dismissNotice}
-                            className="grid size-8 shrink-0 place-items-center rounded-full text-white/60 transition hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                            className="grid size-8 shrink-0 place-items-center rounded-full text-white/75 transition hover:bg-white/15 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                         >
                             <svg
                                 aria-hidden="true"
@@ -143,14 +143,26 @@ function getTitle(tone: NoticeTone): string {
 
 function getIconTone(tone: NoticeTone): string {
     if (tone === 'success') {
-        return 'bg-emerald-400/15 text-emerald-300';
+        return 'bg-white/15 text-white';
     }
 
     if (tone === 'error') {
-        return 'bg-rose-400/15 text-rose-300';
+        return 'bg-rose-500/25 text-white';
     }
 
-    return 'bg-brand-500/20 text-emerald-200';
+    return 'bg-white/15 text-white';
+}
+
+function getNoticeToneClass(tone: NoticeTone): string {
+    if (tone === 'success') {
+        return 'border-emerald-200';
+    }
+
+    if (tone === 'error') {
+        return 'border-rose-300/70';
+    }
+
+    return 'border-emerald-500';
 }
 
 function NoticeIcon({ tone }: { tone: NoticeTone }) {

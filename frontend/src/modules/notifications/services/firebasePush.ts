@@ -1,10 +1,3 @@
-import { getApps, initializeApp } from 'firebase/app';
-import {
-    getMessaging,
-    getToken,
-    isSupported,
-    onMessage,
-} from 'firebase/messaging';
 import {
     store,
     destroy,
@@ -37,11 +30,19 @@ async function getMessagingClient() {
         throw new Error('إعداد Firebase للمتصفح غير مكتمل.');
     }
 
-    if (
-        !('Notification' in window) ||
-        !('serviceWorker' in navigator) ||
-        !(await isSupported())
-    ) {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+        throw new Error('المتصفح لا يدعم إشعارات Firebase.');
+    }
+
+    const [
+        { getApps, initializeApp },
+        { getMessaging, getToken, isSupported, onMessage },
+    ] = await Promise.all([
+        import('firebase/app'),
+        import('firebase/messaging'),
+    ]);
+
+    if (!(await isSupported())) {
         throw new Error('المتصفح لا يدعم إشعارات Firebase.');
     }
 
@@ -54,7 +55,7 @@ async function getMessagingClient() {
         { type: 'module' },
     );
 
-    return { messaging, serviceWorkerRegistration };
+    return { messaging, serviceWorkerRegistration, getToken, onMessage };
 }
 
 export function isFirebasePushConfigured(): boolean {
@@ -82,7 +83,8 @@ export async function registerFirebasePush(
         throw new Error('اسمح بإشعارات المتصفح لتفعيل التنبيهات بالخلفية.');
     }
 
-    const { messaging, serviceWorkerRegistration } = await getMessagingClient();
+    const { messaging, serviceWorkerRegistration, getToken, onMessage } =
+        await getMessagingClient();
     const registrationToken = await getToken(messaging, {
         vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
         serviceWorkerRegistration,

@@ -10,6 +10,19 @@ use Illuminate\Validation\Rule;
 
 class UpdateUserRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $phone = $this->input('phone');
+
+        if (is_string($phone)) {
+            $normalizedPhone = preg_replace('/[\s().-]+/', '', trim($phone));
+
+            $this->merge([
+                'phone' => $normalizedPhone === '' ? null : $normalizedPhone,
+            ]);
+        }
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -33,6 +46,14 @@ class UpdateUserRequest extends FormRequest
                 'email',
                 'max:255',
                 Rule::unique('users', 'email')->ignore($this->route('user')),
+            ],
+            'phone' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:30',
+                'regex:/^\+?[0-9]{7,20}$/',
+                Rule::unique('users', 'phone')->ignore($this->route('user')),
             ],
             'password' => ['sometimes', 'required', 'string', 'min:8'],
             'role' => ['sometimes', 'required', Rule::enum(UserRole::class)],

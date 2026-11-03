@@ -29,6 +29,7 @@ class PatientPortalController extends Controller
 
         $orders = Order::query()
             ->where('patient_id', $patientId ?? 0)
+            ->withSum('payments', 'amount')
             ->with(['branch', 'patient', 'items.sample', 'items.test'])
             ->latest('created_at')
             ->latest('id')
@@ -68,13 +69,43 @@ class PatientPortalController extends Controller
         );
 
         $user = $request->user();
-        $attributes = $request->validated();
-        $address = $user->patientAddresses()->findOrFail($attributes['address_id']);
-        $attributes['patient_id'] = $user->patientProfile()->value('id');
+        /** @var array{
+         *     branch_id: int|string,
+         *     address_id: int|string,
+         *     test_ids: list<int|string>,
+         *     collection_requested_at: string,
+         *     notes?: string|null,
+         *     promotion_id?: int|string|null,
+         *     coupon_code?: string|null
+         * } $validated
+         */
+        $validated = $request->validated();
+        $address = $user->patientAddresses()->whereKey((int) $validated['address_id'])->firstOrFail();
+        /** @var array{
+         *     branch_id: int,
+         *     test_ids: list<int>,
+         *     patient_id: int,
+         *     collection_requested_at: string,
+         *     promotion_id: int|null,
+         *     coupon_code: string|null,
+         *     notes: string|null
+         * } $attributes
+         */
+        $attributes = [
+            'branch_id' => (int) $validated['branch_id'],
+            'test_ids' => array_map(
+                static fn (int|string $testId): int => (int) $testId,
+                $validated['test_ids'],
+            ),
+            'patient_id' => (int) $user->patientProfile()->value('id'),
+            'collection_requested_at' => $validated['collection_requested_at'],
+            'promotion_id' => isset($validated['promotion_id']) ? (int) $validated['promotion_id'] : null,
+            'coupon_code' => $validated['coupon_code'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+        ];
         $attributes['source'] = OrderSource::HomeCollection;
         $attributes['collection_address'] = $address->label.': '.$address->address;
         $attributes['notes'] = $attributes['notes'] ?? $address->instructions;
-        unset($attributes['address_id']);
 
         $order = $createOrder->handle($attributes, $user);
 

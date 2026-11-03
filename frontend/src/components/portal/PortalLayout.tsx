@@ -14,6 +14,43 @@ export type PortalNavigationItem = {
     icon: IconName;
 };
 
+const navigationGroups: Array<{
+    label: string;
+    sections: PortalSection[];
+}> = [
+    { label: 'الرئيسية', sections: ['overview'] },
+    {
+        label: 'إدارة المختبر',
+        sections: ['patients', 'tests', 'branches'],
+    },
+    {
+        label: 'الطلبات وسير العمل',
+        sections: ['orders', 'home-collections', 'samples', 'results'],
+    },
+    {
+        label: 'المالية والتقارير',
+        sections: ['payments', 'shifts', 'reports'],
+    },
+    {
+        label: 'إدارة النظام',
+        sections: [
+            'users',
+            'doctor-review',
+            'referral-discounts',
+            'patient-promotions',
+            'settings',
+        ],
+    },
+    {
+        label: 'بوابة الطبيب',
+        sections: ['doctor-profile', 'doctor-orders', 'doctor-new-referral'],
+    },
+    {
+        label: 'بوابة المريض',
+        sections: ['patient-orders', 'patient-results'],
+    },
+];
+
 type PortalLayoutProps = {
     children: ReactNode;
     section: PortalSection;
@@ -24,14 +61,8 @@ type PortalLayoutProps = {
     navigationItems: PortalNavigationItem[];
     notifications: StoredOrderNotification[];
     realtimeStatus: RealtimeConnectionStatus;
-    soundNotificationsEnabled: boolean;
-    firebasePushAvailable: boolean;
-    firebasePushEnabled: boolean;
-    firebasePushBusy: boolean;
     onNavigate: (section: PortalSection) => void;
     onSignOut: () => void;
-    onToggleSoundNotifications: () => void;
-    onToggleFirebasePushNotifications: () => void;
     onMarkNotificationsAsRead: () => void;
     onOpenNotification: (notification: StoredOrderNotification) => void;
 };
@@ -46,14 +77,8 @@ export function PortalLayout({
     navigationItems,
     notifications,
     realtimeStatus,
-    soundNotificationsEnabled,
-    firebasePushAvailable,
-    firebasePushEnabled,
-    firebasePushBusy,
     onNavigate,
     onSignOut,
-    onToggleSoundNotifications,
-    onToggleFirebasePushNotifications,
     onMarkNotificationsAsRead,
     onOpenNotification,
 }: PortalLayoutProps) {
@@ -63,6 +88,14 @@ export function PortalLayout({
     const unreadCount = notifications.filter(
         (notification) => !notification.isRead,
     ).length;
+    const visibleNavigationGroups = navigationGroups
+        .map((group) => ({
+            ...group,
+            items: navigationItems.filter((item) =>
+                group.sections.includes(item.id),
+            ),
+        }))
+        .filter((group) => group.items.length > 0);
 
     function toggleNotifications() {
         const shouldOpen = !notificationsOpen;
@@ -118,43 +151,54 @@ export function PortalLayout({
 
                 <nav
                     aria-label="القائمة الرئيسية"
-                    className="grid gap-1.5 px-4 py-7"
+                    className="sidebar-navigation grid min-h-0 flex-1 content-start gap-1.5 overflow-y-auto overscroll-contain px-4 py-7"
                 >
-                    <p className="px-3 pb-3 text-[10px] font-bold tracking-widest text-slate-400">
-                        القائمة الرئيسية
-                    </p>
-                    {navigationItems.map((item) => (
-                        <Link
-                            key={item.id}
-                            to={getPortalPath(item.id)}
-                            onClick={(event) => {
-                                event.preventDefault();
-                                onNavigate(item.id);
-                                setMobileMenuOpen(false);
-                            }}
-                            aria-current={
-                                section === item.id ? 'page' : undefined
-                            }
-                            className={`group flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${section === item.id ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                    {visibleNavigationGroups.map((group) => (
+                        <section
+                            key={group.label}
+                            aria-label={group.label}
+                            className="grid gap-1.5"
                         >
-                            <span
-                                className={`grid size-8 place-items-center rounded-lg transition ${section === item.id ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-400 group-hover:text-slate-600'}`}
-                            >
-                                <Icon name={item.icon} size={17} />
-                            </span>
-                            <span>{item.label}</span>
-                            {item.id === 'orders' && unreadCount > 0 && (
-                                <span
-                                    aria-label={`${unreadCount} طلب جديد`}
-                                    className="mr-auto min-w-5 rounded-full bg-rose-600 px-1.5 py-0.5 text-center text-[10px] font-bold text-white"
+                            <h2 className="px-3 pt-3 pb-1 text-[12px] font-bold tracking-widest text-slate-400">
+                                {group.label}
+                            </h2>
+                            {group.items.map((item) => (
+                                <Link
+                                    key={item.id}
+                                    to={getPortalPath(item.id)}
+                                    onClick={(event) => {
+                                        event.preventDefault();
+                                        onNavigate(item.id);
+                                        setMobileMenuOpen(false);
+                                    }}
+                                    aria-current={
+                                        section === item.id ? 'page' : undefined
+                                    }
+                                    className={`group flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition ${section === item.id ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-100' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
                                 >
-                                    {unreadCount > 99 ? '99+' : unreadCount}
-                                </span>
-                            )}
-                            {section === item.id && (
-                                <span className="mr-auto size-1.5 rounded-full bg-brand-500" />
-                            )}
-                        </Link>
+                                    <span
+                                        className={`grid size-8 place-items-center rounded-lg transition ${section === item.id ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-400 group-hover:text-slate-600'}`}
+                                    >
+                                        <Icon name={item.icon} size={17} />
+                                    </span>
+                                    <span>{item.label}</span>
+                                    {item.id === 'orders' &&
+                                        unreadCount > 0 && (
+                                            <span
+                                                aria-label={`${unreadCount} طلب جديد`}
+                                                className="mr-auto min-w-5 rounded-full bg-rose-600 px-1.5 py-0.5 text-center text-[10px] font-bold text-white"
+                                            >
+                                                {unreadCount > 99
+                                                    ? '99+'
+                                                    : unreadCount}
+                                            </span>
+                                        )}
+                                    {section === item.id && (
+                                        <span className="mr-auto size-1.5 rounded-full bg-brand-500" />
+                                    )}
+                                </Link>
+                            ))}
+                        </section>
                     ))}
                 </nav>
 
@@ -171,7 +215,6 @@ export function PortalLayout({
                                 {roleLabel}
                             </p>
                         </div>
-                        <span className="size-2 rounded-full bg-emerald-500" />
                     </div>
                     <button
                         type="button"
@@ -331,70 +374,20 @@ export function PortalLayout({
                                         </section>
                                     )}
                                 </div>
-                                <button
-                                    type="button"
-                                    aria-pressed={soundNotificationsEnabled}
-                                    aria-label={
-                                        soundNotificationsEnabled
-                                            ? 'إيقاف صوت التنبيه'
-                                            : 'تفعيل صوت التنبيه'
-                                    }
-                                    onClick={onToggleSoundNotifications}
-                                    className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 sm:px-3"
-                                >
-                                    <span className="sm:hidden">
-                                        {soundNotificationsEnabled
-                                            ? 'الصوت يعمل'
-                                            : 'تفعيل الصوت'}
-                                    </span>
-                                    <span className="hidden sm:inline">
-                                        {soundNotificationsEnabled
-                                            ? 'إيقاف صوت التنبيه'
-                                            : 'تفعيل صوت التنبيه'}
-                                    </span>
-                                </button>
-                                {firebasePushAvailable ? (
-                                    <button
-                                        type="button"
-                                        aria-pressed={firebasePushEnabled}
-                                        aria-label={
-                                            firebasePushEnabled
-                                                ? 'إيقاف إشعارات الخلفية'
-                                                : 'تفعيل إشعارات الخلفية'
-                                        }
-                                        disabled={firebasePushBusy}
-                                        onClick={
-                                            onToggleFirebasePushNotifications
-                                        }
-                                        className="rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 sm:px-3"
-                                    >
-                                        <span className="sm:hidden">
-                                            {firebasePushBusy
-                                                ? 'جاري...'
-                                                : firebasePushEnabled
-                                                  ? 'إيقاف الخلفية'
-                                                  : 'تنبيه بالخلفية'}
-                                        </span>
-                                        <span className="hidden sm:inline">
-                                            {firebasePushBusy
-                                                ? 'جاري التحديث...'
-                                                : firebasePushEnabled
-                                                  ? 'إيقاف إشعارات الخلفية'
-                                                  : 'تفعيل إشعارات الخلفية'}
-                                        </span>
-                                    </button>
-                                ) : (
-                                    <span
-                                        role="status"
-                                        title="أضف إعدادات Firebase وVAPID لتفعيل إشعارات الخلفية."
-                                        className="hidden text-xs text-slate-500 xl:inline"
-                                    >
-                                        Firebase غير مُعد
-                                    </span>
-                                )}
                                 <span
                                     role="status"
-                                    className={`hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium sm:inline-flex ${
+                                    aria-label={`حالة التنبيهات: ${
+                                        realtimeStatus === 'connected'
+                                            ? 'متصلة'
+                                            : realtimeStatus === 'connecting' ||
+                                                realtimeStatus ===
+                                                    'reconnecting'
+                                              ? 'جارٍ الاتصال'
+                                              : realtimeStatus === 'failed'
+                                                ? 'فشل الاتصال'
+                                                : 'غير متصلة'
+                                    }`}
+                                    className={`hidden items-center gap-2 rounded-full border px-2.5 py-1.5 text-[11px] font-medium md:inline-flex ${
                                         realtimeStatus === 'connected'
                                             ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
                                             : 'border-amber-200 bg-amber-50 text-amber-800'
@@ -408,13 +401,13 @@ export function PortalLayout({
                                         }`}
                                     />
                                     {realtimeStatus === 'connected'
-                                        ? 'التنبيهات المباشرة متصلة'
+                                        ? 'التنبيهات متصلة'
                                         : realtimeStatus === 'connecting' ||
                                             realtimeStatus === 'reconnecting'
-                                          ? 'جاري الاتصال بالتنبيهات'
+                                          ? 'جارٍ الاتصال'
                                           : realtimeStatus === 'failed'
-                                            ? 'فشل الاتصال بالتنبيهات'
-                                            : 'التنبيهات غير متصلة'}
+                                            ? 'فشل الاتصال'
+                                            : 'غير متصل'}
                                 </span>
                             </>
                         )}

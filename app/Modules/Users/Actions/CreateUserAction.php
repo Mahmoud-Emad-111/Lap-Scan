@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 class CreateUserAction
 {
     /**
-     * @param  array{name: string, email: string, password: string, role: string, branch_ids?: list<int>}  $attributes
+     * @param  array{name: string, email: string, phone?: string|null, password: string, role: string, branch_ids?: list<int>}  $attributes
      */
     public function handle(array $attributes): User
     {
@@ -17,6 +17,7 @@ class CreateUserAction
             $user = User::query()->create([
                 'name' => $attributes['name'],
                 'email' => $attributes['email'],
+                'phone' => $attributes['phone'] ?? null,
                 'password' => $attributes['password'],
             ]);
             $user->forceFill(['role' => UserRole::from($attributes['role'])])->save();

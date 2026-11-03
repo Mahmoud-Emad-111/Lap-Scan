@@ -382,17 +382,13 @@ export function DoctorOrdersPage({ token }: { token: string }) {
                                     </TableCell>
                                     <TableCell>{order.branch.name}</TableCell>
                                     <TableCell>
-                                        <span
-                                            className={
-                                                order.priority === 'urgent'
-                                                    ? 'font-bold text-rose-700'
-                                                    : 'text-slate-600'
-                                            }
-                                        >
-                                            {order.priority === 'urgent'
-                                                ? 'عاجل'
-                                                : 'عادي'}
-                                        </span>
+                                        {order.priority === 'urgent' ? (
+                                            <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700">
+                                                عاجل
+                                            </span>
+                                        ) : (
+                                            'عادي'
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <StatusBadge status={order.status} />
@@ -402,7 +398,7 @@ export function DoctorOrdersPage({ token }: { token: string }) {
                                             {formatPrice(order.total)}
                                         </span>
                                         {Number(order.discount_amount) > 0 && (
-                                            <span className="block text-xs text-emerald-700">
+                                            <span className="mt-1 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800">
                                                 خصم:{' '}
                                                 {formatPrice(
                                                     order.discount_amount,
@@ -411,9 +407,17 @@ export function DoctorOrdersPage({ token }: { token: string }) {
                                         )}
                                     </TableCell>
                                     <TableCell>
-                                        {order.results_available
-                                            ? 'متاحة'
-                                            : 'قيد الإجراء'}
+                                        <span
+                                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                                                order.results_available
+                                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                    : 'border-amber-200 bg-amber-50 text-amber-800'
+                                            }`}
+                                        >
+                                            {order.results_available
+                                                ? 'متاحة'
+                                                : 'قيد الإجراء'}
+                                        </span>
                                     </TableCell>
                                     <TableCell>
                                         <button

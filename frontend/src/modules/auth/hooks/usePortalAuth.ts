@@ -19,7 +19,7 @@ export function usePortalAuth() {
     const [token, setToken] = useState<string | null>(null);
     const [user, setUser] = useState<AuthUser | null>(null);
     const [booting, setBooting] = useState(true);
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState('');
     const [showDemoCredentials, setShowDemoCredentials] = useState(false);
@@ -70,7 +70,7 @@ export function usePortalAuth() {
 
         try {
             const response = await login({
-                email,
+                identifier,
                 password,
                 device_name: 'laboratory-web',
             });
@@ -117,8 +117,8 @@ export function usePortalAuth() {
         token,
         user,
         booting,
-        email,
-        setEmail,
+        identifier,
+        setIdentifier,
         password,
         setPassword,
         loginError,

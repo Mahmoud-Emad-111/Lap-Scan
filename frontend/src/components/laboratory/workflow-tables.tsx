@@ -63,11 +63,25 @@ export function WorkflowTable({
     if (section === 'users') {
         return (
             <DataTable
-                headings={['الاسم', 'البريد الإلكتروني', 'الدور', 'الفروع', '']}
+                headings={[
+                    'الاسم',
+                    'رقم الهاتف',
+                    'البريد الإلكتروني',
+                    'الدور',
+                    'الفروع',
+                    '',
+                ]}
             >
                 {rows.map((user) => (
                     <tr key={user.id}>
                         <TableCell>{user.name}</TableCell>
+                        <TableCell>
+                            {user.phone ? (
+                                <bdi dir="ltr">{user.phone}</bdi>
+                            ) : (
+                                '—'
+                            )}
+                        </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
                             {user.role ? roleLabels[user.role] : '—'}
@@ -148,7 +162,7 @@ export function WorkflowTable({
                                 {order.priority === 'urgent' ? (
                                     <span
                                         title={order.urgent_reason ?? ''}
-                                        className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                                        className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
                                     >
                                         عاجل
                                     </span>
@@ -170,7 +184,7 @@ export function WorkflowTable({
                                     </span>
                                     {order.discount_amount !== undefined &&
                                         Number(order.discount_amount) > 0 && (
-                                            <span className="block text-xs text-emerald-700">
+                                            <span className="mt-1 inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800">
                                                 خصم:{' '}
                                                 {formatPrice(
                                                     order.discount_amount,

@@ -13,6 +13,7 @@ import type {
 } from '@/modules/laboratory/types';
 import { isDoctorPortalSection, type PortalSection } from '@/app/routes';
 import { isWorkflowSection } from '@/components/laboratory/workflow-types';
+import type { NotificationSound } from '@/modules/notifications/notification-sounds';
 
 const WorkflowSectionPage = lazy(() =>
     import('@/components/laboratory/workflow-pages').then((module) => ({
@@ -48,6 +49,16 @@ const AppSettingsPage = lazy(() =>
         default: module.AppSettingsPage,
     })),
 );
+const PaymentsPage = lazy(() =>
+    import('@/modules/finance/pages/PaymentsPage').then((module) => ({
+        default: module.PaymentsPage,
+    })),
+);
+const ShiftsPage = lazy(() =>
+    import('@/modules/shifts/pages/ShiftsPage').then((module) => ({
+        default: module.ShiftsPage,
+    })),
+);
 
 type CatalogPage = ApiPage<Patient> | ApiPage<LabTest> | ApiPage<Branch> | null;
 
@@ -57,6 +68,7 @@ type PortalPageContentProps = {
     user: AuthUser;
     roleLabel: string;
     initialOrderSearch?: string;
+    initialOrderPriority?: string;
     orderRealtimeRevision: number;
     canManagePatients: boolean;
     canManageBranches: boolean;
@@ -65,10 +77,21 @@ type PortalPageContentProps = {
     branchesTotal?: number;
     summary: DashboardSummary | null;
     loading: boolean;
+    soundNotificationsEnabled: boolean;
+    notificationSound: NotificationSound;
+    firebasePushAvailable: boolean;
+    firebasePushEnabled: boolean;
+    firebasePushBusy: boolean;
+    onToggleSoundNotifications: () => void;
+    onNotificationSoundChange: (sound: NotificationSound) => void;
+    onPreviewNotificationSound: () => void;
+    onToggleFirebasePushNotifications: () => void;
     catalogPage: CatalogPage;
     query: string;
     onQueryChange: (query: string) => void;
     onNavigate: (section: PortalSection) => void;
+    onViewOrder: (orderNumber: string) => void;
+    onViewUrgentOrders: () => void;
     onAdd: (kind: CatalogEditor['kind']) => void;
     onEdit: (record: Patient | LabTest | Branch) => void;
     onPageChange: (section: PortalSection, url: string) => void;
@@ -82,6 +105,7 @@ export function PortalPageContent({
     user,
     roleLabel,
     initialOrderSearch,
+    initialOrderPriority,
     orderRealtimeRevision,
     canManagePatients,
     canManageBranches,
@@ -90,10 +114,21 @@ export function PortalPageContent({
     branchesTotal,
     summary,
     loading,
+    soundNotificationsEnabled,
+    notificationSound,
+    firebasePushAvailable,
+    firebasePushEnabled,
+    firebasePushBusy,
+    onToggleSoundNotifications,
+    onNotificationSoundChange,
+    onPreviewNotificationSound,
+    onToggleFirebasePushNotifications,
     catalogPage,
     query,
     onQueryChange,
     onNavigate,
+    onViewOrder,
+    onViewUrgentOrders,
     onAdd,
     onEdit,
     onPageChange,
@@ -121,7 +156,11 @@ export function PortalPageContent({
                     branchesTotal={branchesTotal}
                     summary={summary}
                     loading={loading}
+                    token={token}
+                    orderRealtimeRevision={orderRealtimeRevision}
                     onNavigate={onNavigate}
+                    onViewOrder={onViewOrder}
+                    onViewUrgentOrders={onViewUrgentOrders}
                 />
             ) : isDoctorPortalSection(section) ? (
                 <Suspense fallback={<PageChunkFallback />}>
@@ -141,7 +180,36 @@ export function PortalPageContent({
                 </Suspense>
             ) : section === 'settings' ? (
                 <Suspense fallback={<PageChunkFallback />}>
-                    <AppSettingsPage token={token} />
+                    <AppSettingsPage
+                        token={token}
+                        canManageSystemSettings={user.role === 'lab_admin'}
+                        soundNotificationsEnabled={soundNotificationsEnabled}
+                        notificationSound={notificationSound}
+                        firebasePushAvailable={firebasePushAvailable}
+                        firebasePushEnabled={firebasePushEnabled}
+                        firebasePushBusy={firebasePushBusy}
+                        onToggleSoundNotifications={onToggleSoundNotifications}
+                        onNotificationSoundChange={onNotificationSoundChange}
+                        onPreviewNotificationSound={onPreviewNotificationSound}
+                        onToggleFirebasePushNotifications={
+                            onToggleFirebasePushNotifications
+                        }
+                    />
+                </Suspense>
+            ) : section === 'payments' ? (
+                <Suspense fallback={<PageChunkFallback />}>
+                    <PaymentsPage
+                        token={token}
+                        isAdministrator={user.role === 'lab_admin'}
+                    />
+                </Suspense>
+            ) : section === 'shifts' ? (
+                <Suspense fallback={<PageChunkFallback />}>
+                    <ShiftsPage
+                        token={token}
+                        isAdministrator={user.role === 'lab_admin'}
+                        currentUserId={user.id}
+                    />
                 </Suspense>
             ) : isWorkflowSection(section) ? (
                 <Suspense fallback={<PageChunkFallback />}>
@@ -152,6 +220,7 @@ export function PortalPageContent({
                         currentUserId={user.id}
                         orderRealtimeRevision={orderRealtimeRevision}
                         initialOrderSearch={initialOrderSearch}
+                        initialOrderPriority={initialOrderPriority}
                     />
                 </Suspense>
             ) : isCatalogSection(section) ? (

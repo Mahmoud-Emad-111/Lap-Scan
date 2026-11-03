@@ -33,6 +33,65 @@ it('allows a laboratory administrator to create a branch-scoped staff account', 
     ]);
 });
 
+it('stores an optional normalized phone number when creating a user', function () {
+    $administrator = User::factory()->create();
+    $administrator->forceFill(['role' => UserRole::LabAdmin])->save();
+    Sanctum::actingAs($administrator);
+
+    $response = $this->postJson('/api/v1/users', [
+        'name' => 'موظف جديد',
+        'email' => 'phone-user@example.test',
+        'phone' => '+20 (10) 1234-5678',
+        'password' => 'secure-pass-123',
+        'role' => UserRole::LabAdmin->value,
+    ]);
+
+    $response->assertCreated()
+        ->assertJsonPath('data.phone', '+201012345678');
+
+    $this->assertDatabaseHas('users', [
+        'email' => 'phone-user@example.test',
+        'phone' => '+201012345678',
+    ]);
+});
+
+it('rejects a phone number already assigned to another user', function () {
+    $administrator = User::factory()->create();
+    $administrator->forceFill(['role' => UserRole::LabAdmin])->save();
+    User::factory()->create(['phone' => '01012345678']);
+    Sanctum::actingAs($administrator);
+
+    $this->postJson('/api/v1/users', [
+        'name' => 'موظف جديد',
+        'email' => 'duplicate-phone@example.test',
+        'phone' => '010 1234-5678',
+        'password' => 'secure-pass-123',
+        'role' => UserRole::LabAdmin->value,
+    ])->assertUnprocessable()
+        ->assertJsonValidationErrors('phone');
+
+    $this->assertDatabaseMissing('users', [
+        'email' => 'duplicate-phone@example.test',
+    ]);
+});
+
+it('allows an administrator to update a user phone number', function () {
+    $administrator = User::factory()->create();
+    $administrator->forceFill(['role' => UserRole::LabAdmin])->save();
+    $user = User::factory()->create();
+    Sanctum::actingAs($administrator);
+
+    $this->patchJson("/api/v1/users/{$user->id}", [
+        'phone' => '010 1234-5678',
+    ])->assertOk()
+        ->assertJsonPath('data.phone', '01012345678');
+
+    $this->assertDatabaseHas('users', [
+        'id' => $user->id,
+        'phone' => '01012345678',
+    ]);
+});
+
 it('returns 403 when laboratory staff attempt to access user administration', function () {
     $staff = User::factory()->create();
     $staff->forceFill(['role' => UserRole::LabStaff])->save();

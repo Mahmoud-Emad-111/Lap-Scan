@@ -7,8 +7,10 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\DoctorController;
 use App\Http\Controllers\Api\V1\DoctorPortalController;
 use App\Http\Controllers\Api\V1\DoctorProfileController;
+use App\Http\Controllers\Api\V1\FinanceReportController;
 use App\Http\Controllers\Api\V1\LabResultController;
 use App\Http\Controllers\Api\V1\OrderController;
+use App\Http\Controllers\Api\V1\OrderPaymentController;
 use App\Http\Controllers\Api\V1\PatientAddressController;
 use App\Http\Controllers\Api\V1\PatientController;
 use App\Http\Controllers\Api\V1\PatientPortalController;
@@ -18,6 +20,8 @@ use App\Http\Controllers\Api\V1\PushTokenController;
 use App\Http\Controllers\Api\V1\ReferralDiscountRuleController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SampleController;
+use App\Http\Controllers\Api\V1\ShiftAttendanceController;
+use App\Http\Controllers\Api\V1\ShiftScheduleController;
 use App\Http\Controllers\Api\V1\TestController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
@@ -40,6 +44,17 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::patch('/settings', [AppSettingController::class, 'update'])->name('settings.update');
         Route::apiResource('users', UserController::class)->only(['index', 'store', 'show', 'update']);
         Route::apiResource('orders', OrderController::class)->only(['index', 'store', 'show']);
+        Route::get('/payments', [OrderPaymentController::class, 'index'])->name('payments.index');
+        Route::post('/orders/{order}/payments', [OrderPaymentController::class, 'store'])->name('orders.payments.store');
+        Route::get('/reports/finance', FinanceReportController::class)->name('reports.finance');
+        Route::apiResource('shift-schedules', ShiftScheduleController::class)
+            ->only(['index', 'store', 'update'])
+            ->parameters(['shift-schedules' => 'shiftSchedule']);
+        Route::get('/shifts', [ShiftAttendanceController::class, 'index'])->name('shifts.index');
+        Route::post('/shift-schedules/{shiftSchedule}/clock-in', [ShiftAttendanceController::class, 'clockIn'])
+            ->name('shift-schedules.clock-in');
+        Route::post('/shift-schedules/{shiftSchedule}/clock-out', [ShiftAttendanceController::class, 'clockOut'])
+            ->name('shift-schedules.clock-out');
         Route::apiResource('referral-discount-rules', ReferralDiscountRuleController::class)
             ->only(['index', 'store', 'update']);
         Route::apiResource('patient-promotions', PatientPromotionController::class)

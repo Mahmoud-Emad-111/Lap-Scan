@@ -26,12 +26,12 @@ In another terminal, start Laravel from the repository root with `php artisan se
 | `VITE_REVERB_HOST`                  | Reverb host reachable from this browser                               | `localhost`             |
 | `VITE_REVERB_PORT`                  | Reverb browser port                                                   | `8080`                  |
 | `VITE_REVERB_SCHEME`                | Reverb connection scheme                                              | `http`                  |
-| `VITE_FIREBASE_API_KEY`             | Firebase web app API key                                               | Firebase project value  |
-| `VITE_FIREBASE_AUTH_DOMAIN`         | Firebase web app auth domain                                           | Firebase project value  |
-| `VITE_FIREBASE_PROJECT_ID`          | Firebase project ID                                                    | Firebase project value  |
-| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Cloud Messaging sender ID                                     | Firebase project value  |
-| `VITE_FIREBASE_APP_ID`              | Firebase web app ID                                                     | Firebase project value  |
-| `VITE_FIREBASE_VAPID_KEY`           | Firebase Web Push certificate key                                      | Firebase project value  |
+| `VITE_FIREBASE_API_KEY`             | Firebase web app API key                                              | Firebase project value  |
+| `VITE_FIREBASE_AUTH_DOMAIN`         | Firebase web app auth domain                                          | Firebase project value  |
+| `VITE_FIREBASE_PROJECT_ID`          | Firebase project ID                                                   | Firebase project value  |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase Cloud Messaging sender ID                                    | Firebase project value  |
+| `VITE_FIREBASE_APP_ID`              | Firebase web app ID                                                   | Firebase project value  |
+| `VITE_FIREBASE_VAPID_KEY`           | Firebase Web Push certificate key                                     | Firebase project value  |
 
 Copy `.env.example` to `.env` and adjust the API origin for your environment. Use the API origin only, without an `/api` suffix. Leave `VITE_API_BASE_URL` empty for a same-origin production deployment.
 

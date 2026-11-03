@@ -54,6 +54,7 @@ export type WorkflowRow = {
     id: number;
     name?: string;
     email?: string;
+    phone?: string | null;
     role?: UserRole;
     branches?: BranchOption[];
     order_number?: string;

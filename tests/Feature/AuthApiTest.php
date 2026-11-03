@@ -38,6 +38,33 @@ it('returns 401 when the password is invalid', function () {
     $this->assertDatabaseCount('personal_access_tokens', 0);
 });
 
+it('allows a user to sign in with their formatted phone number', function () {
+    $user = User::factory()->create(['phone' => '01012345678']);
+
+    $this->postJson('/api/v1/login', [
+        'identifier' => '010 1234-5678',
+        'password' => 'password',
+        'device_name' => 'laboratory-client',
+    ])->assertOk()
+        ->assertJsonPath('data.user.id', $user->id)
+        ->assertJsonPath('data.user.phone', '01012345678');
+});
+
+it('returns 401 when a user phone conflicts with another patient phone', function () {
+    User::factory()->create(['phone' => '01012345678']);
+    $patient = User::factory()->create();
+    $patient->forceFill(['role' => UserRole::Patient])->save();
+    Patient::factory()->for($patient)->create(['phone' => '01012345678']);
+
+    $this->postJson('/api/v1/login', [
+        'identifier' => '01012345678',
+        'password' => 'password',
+        'device_name' => 'laboratory-client',
+    ])->assertUnauthorized();
+
+    $this->assertDatabaseCount('personal_access_tokens', 0);
+});
+
 it('allows patients to sign in with their unique linked phone number', function () {
     $user = User::factory()->create();
     $user->forceFill(['role' => UserRole::Patient])->save();

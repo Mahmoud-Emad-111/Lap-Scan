@@ -8,6 +8,7 @@ use App\Models\LabResult;
 use App\Models\OrderItem;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -84,7 +85,7 @@ class SaveLabResultAction
 
                 $result->status = LabResultStatus::Draft;
                 $result->entered_by = $author->id;
-                $result->entered_at = now();
+                $result->entered_at = Carbon::now();
                 $result->approved_by = null;
                 $result->approved_at = null;
                 $result->save();
@@ -92,7 +93,7 @@ class SaveLabResultAction
                 return $result->refresh();
             });
         } catch (Throwable $exception) {
-            if ($storedPath !== null && ! Storage::disk('local')->delete($storedPath)) {
+            if (is_string($storedPath) && ! Storage::disk('local')->delete($storedPath)) {
                 Log::warning('Failed to remove a lab result document after a failed save.', [
                     'order_item_id' => $orderItem->id,
                     'path' => $storedPath,

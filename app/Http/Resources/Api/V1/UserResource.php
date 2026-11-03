@@ -23,6 +23,7 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
+            'phone' => $this->phone,
             'role' => $this->role->value,
             'doctor_verification_status' => $this->when(
                 $this->role === UserRole::Doctor,

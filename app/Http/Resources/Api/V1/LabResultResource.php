@@ -48,7 +48,7 @@ class LabResultResource extends JsonResource
             'status' => $this->status->value,
             'version' => $this->version,
             'entered_by' => $this->entered_by,
-            'entered_at' => $this->entered_at?->toISOString(),
+            'entered_at' => $this->entered_at->toISOString(),
             'approved_by' => $this->approved_by,
             'approved_at' => $this->approved_at?->toISOString(),
         ];

@@ -271,7 +271,7 @@ function CatalogTable({
                     <td className="px-5 py-4 font-semibold text-slate-800">
                         {branch.name}
                         {branch.is_default && (
-                            <span className="mr-2 rounded-full bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">
+                            <span className="mr-2 inline-flex rounded-full border border-brand-100 bg-brand-50 px-2 py-1 text-[10px] font-semibold text-brand-700">
                                 افتراضي
                             </span>
                         )}
@@ -285,7 +285,7 @@ function CatalogTable({
                     </td>
                     <td className="px-5 py-4">
                         <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${branch.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${branch.is_active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}
                         >
                             {branch.is_active ? 'نشط' : 'غير نشط'}
                         </span>

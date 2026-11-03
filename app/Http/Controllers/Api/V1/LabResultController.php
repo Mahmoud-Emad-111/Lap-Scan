@@ -49,13 +49,13 @@ class LabResultController extends Controller
     ): JsonResponse {
         Gate::authorize('view', $orderItem->order);
 
-        $attributes = $request->validated();
-        unset(
-            $attributes['document'],
-            $attributes['pdf'],
-            $attributes['remove_document'],
-            $attributes['remove_pdf'],
-        );
+        /** @var array{value: string, unit?: string|null, reference_range?: string|null, notes?: string|null} $attributes */
+        $attributes = $request->safe()->only([
+            'value',
+            'unit',
+            'reference_range',
+            'notes',
+        ]);
 
         $result = $saveLabResult->handle(
             $orderItem,
@@ -119,10 +119,19 @@ class LabResultController extends Controller
         LabResult $result,
         CorrectLabResultAction $correctResult,
     ): LabResultResource {
+        /** @var array{reason: string, value: string, unit?: string|null, reference_range?: string|null, notes?: string|null} $attributes */
+        $attributes = $request->safe()->only([
+            'reason',
+            'value',
+            'unit',
+            'reference_range',
+            'notes',
+        ]);
+
         return LabResultResource::make(
             $correctResult->handle(
                 $result,
-                $request->validated(),
+                $attributes,
                 $request->user(),
             )->load('orderItem.order.patient'),
         );

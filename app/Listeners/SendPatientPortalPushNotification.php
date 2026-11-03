@@ -13,9 +13,10 @@ use Kreait\Firebase\Messaging\WebPushConfig;
 
 class SendPatientPortalPushNotification implements ShouldQueue
 {
-    public $tries = 4;
+    public int $tries = 4;
 
-    public $backoff = [5, 15, 30];
+    /** @var array<int, int> */
+    public array $backoff = [5, 15, 30];
 
     public function handle(PatientPortalUpdated $event): void
     {

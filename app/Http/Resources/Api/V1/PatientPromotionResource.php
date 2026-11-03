@@ -10,6 +10,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin PatientPromotion */
 class PatientPromotionResource extends JsonResource
 {
+    /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
         return [

@@ -32,6 +32,7 @@ type DataResponse<T> = { data: T };
 export type WorkflowUserPayload = {
     name: string;
     email: string;
+    phone?: string | null;
     password?: string;
     role: UserRole;
     branch_ids?: number[];

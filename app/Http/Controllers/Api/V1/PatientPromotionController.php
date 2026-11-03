@@ -42,8 +42,7 @@ class PatientPromotionController extends Controller
         StorePatientPromotionRequest $request,
         SavePatientPromotionAction $savePromotion,
     ): JsonResponse {
-        /** @var array<string, mixed> $attributes */
-        $attributes = $request->validated();
+        $attributes = $request->promotionAttributes();
         $promotion = $savePromotion->handle($attributes, $request->user());
 
         return PatientPromotionResource::make($promotion)->response()->setStatusCode(201);
@@ -54,8 +53,7 @@ class PatientPromotionController extends Controller
         PatientPromotion $patientPromotion,
         SavePatientPromotionAction $savePromotion,
     ): PatientPromotionResource {
-        /** @var array<string, mixed> $attributes */
-        $attributes = $request->validated();
+        $attributes = $request->promotionAttributes();
 
         return PatientPromotionResource::make(
             $savePromotion->handle($attributes, $request->user(), $patientPromotion),

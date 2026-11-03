@@ -7,6 +7,24 @@ use Illuminate\Validation\Rule;
 
 class LoginRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $key = $this->filled('identifier') ? 'identifier' : 'email';
+        $value = $this->input($key);
+
+        if (! is_string($value)) {
+            return;
+        }
+
+        $value = trim($value);
+
+        if (! filter_var($value, FILTER_VALIDATE_EMAIL)) {
+            $value = preg_replace('/[\s().-]+/', '', $value) ?? $value;
+        }
+
+        $this->merge([$key => $value]);
+    }
+
     public function authorize(): bool
     {
         return true;

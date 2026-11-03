@@ -20,16 +20,18 @@ class AuthController extends Controller
         $user = User::query()->where('email', $identifier)->first();
 
         if ($user === null && ! filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
-            $matchingPatients = User::query()
-                ->where('role', UserRole::Patient)
-                ->whereHas(
-                    'patientProfile',
-                    fn ($query) => $query->where('phone', $identifier),
-                )
+            $matchingUsers = User::query()
+                ->where('phone', $identifier)
+                ->orWhereHas('patientProfile', function ($patients) use ($identifier): void {
+                    $patients->where('phone', $identifier)
+                        ->whereHas(
+                            'user',
+                            fn ($users) => $users->where('role', UserRole::Patient),
+                        );
+                })
                 ->limit(2)
                 ->get();
-
-            $user = $matchingPatients->count() === 1 ? $matchingPatients->first() : null;
+            $user = $matchingUsers->count() === 1 ? $matchingUsers->first() : null;
         }
 
         if ($user === null || ! Hash::check($credentials['password'], $user->password)) {
@@ -49,10 +51,9 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'phone' => $user->phone,
                     'role' => $user->role->value,
-                    'doctor_verification_status' => $user->role === UserRole::Doctor
-                        ? ($user->doctorProfile?->verification_status ?? DoctorVerificationStatus::Pending)->value
-                        : null,
+                    'doctor_verification_status' => $this->doctorVerificationStatus($user),
                 ],
             ],
         ]);
@@ -67,12 +68,26 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'phone' => $user->phone,
                 'role' => $user->role->value,
-                'doctor_verification_status' => $user->role === UserRole::Doctor
-                    ? ($user->doctorProfile?->verification_status ?? DoctorVerificationStatus::Pending)->value
-                    : null,
+                'doctor_verification_status' => $this->doctorVerificationStatus($user),
             ],
         ]);
+    }
+
+    private function doctorVerificationStatus(User $user): ?string
+    {
+        if ($user->role !== UserRole::Doctor) {
+            return null;
+        }
+
+        $doctorProfile = $user->doctorProfile()->first();
+
+        if ($doctorProfile === null) {
+            return DoctorVerificationStatus::Pending->value;
+        }
+
+        return $doctorProfile->verification_status->value;
     }
 
     public function destroy(Request $request): JsonResponse

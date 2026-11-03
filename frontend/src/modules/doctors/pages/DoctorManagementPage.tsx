@@ -22,6 +22,12 @@ const statusLabels: Record<DoctorProfile['verification_status'], string> = {
     rejected: 'مرفوض',
     suspended: 'موقوف',
 };
+const statusTones: Record<DoctorProfile['verification_status'], string> = {
+    pending: 'border-amber-200 bg-amber-50 text-amber-800',
+    verified: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    rejected: 'border-rose-200 bg-rose-50 text-rose-800',
+    suspended: 'border-slate-200 bg-slate-100 text-slate-700',
+};
 
 export function DoctorManagementPage({ token }: { token: string }) {
     const { showSuccessNotice } = useNotifications();
@@ -161,7 +167,9 @@ export function DoctorManagementPage({ token }: { token: string }) {
                                 </span>
                             </TableCell>
                             <TableCell>
-                                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                                <span
+                                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusTones[doctor.verification_status]}`}
+                                >
                                     {statusLabels[doctor.verification_status]}
                                 </span>
                             </TableCell>

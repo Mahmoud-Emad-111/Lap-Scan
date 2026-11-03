@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 class UpdateUserAction
 {
     /**
-     * @param  array{name?: string, email?: string, password?: string, role?: string, branch_ids?: list<int>}  $attributes
+     * @param  array{name?: string, email?: string, phone?: string|null, password?: string, role?: string, branch_ids?: list<int>}  $attributes
      */
     public function handle(User $user, array $attributes): User
     {

@@ -44,8 +44,8 @@ function WelcomePage() {
         token,
         user,
         booting,
-        email: loginEmail,
-        setEmail: setLoginEmail,
+        identifier: loginIdentifier,
+        setIdentifier: setLoginIdentifier,
         password: loginPassword,
         setPassword: setLoginPassword,
         loginError,
@@ -58,6 +58,11 @@ function WelcomePage() {
     const initialOrderSearch =
         section === 'orders' || section === 'home-collections'
             ? (new URLSearchParams(location.search).get('order') ?? undefined)
+            : undefined;
+    const initialOrderPriority =
+        section === 'orders' &&
+        new URLSearchParams(location.search).get('priority') === 'urgent'
+            ? 'urgent'
             : undefined;
     const catalog = useLaboratoryCatalog({
         token,
@@ -98,11 +103,14 @@ function WelcomePage() {
         realtimeRevision: orderRealtimeRevision,
         realtimeStatus,
         soundEnabled: soundNotificationsEnabled,
+        notificationSound,
         firebasePushAvailable,
         firebasePushEnabled,
         firebasePushBusy,
         markNotificationsAsRead: synchronizeReadNotifications,
         toggleSoundNotifications,
+        changeNotificationSound,
+        previewNotificationSound,
         toggleFirebasePushNotifications,
     } = useOrderNotifications({ token, user });
 
@@ -151,6 +159,16 @@ function WelcomePage() {
                           icon: 'clipboard' as const,
                       },
                       {
+                          id: 'payments' as const,
+                          label: 'المدفوعات',
+                          icon: 'report' as const,
+                      },
+                      {
+                          id: 'shifts' as const,
+                          label: 'الشيفتات والحضور',
+                          icon: 'users' as const,
+                      },
+                      {
                           id: 'home-collections' as const,
                           label: 'طلبات السحب المنزلي',
                           icon: 'activity' as const,
@@ -169,6 +187,11 @@ function WelcomePage() {
                           id: 'reports' as const,
                           label: 'التقارير',
                           icon: 'report' as const,
+                      },
+                      {
+                          id: 'settings' as const,
+                          label: 'الإعدادات',
+                          icon: 'settings' as const,
                       },
                   ]
                 : []),
@@ -193,11 +216,6 @@ function WelcomePage() {
                           id: 'patient-promotions' as const,
                           label: 'العروض والكوبونات',
                           icon: 'report' as const,
-                      },
-                      {
-                          id: 'settings' as const,
-                          label: 'الإعدادات',
-                          icon: 'settings' as const,
                       },
                   ]
                 : []),
@@ -244,6 +262,20 @@ function WelcomePage() {
         void navigate(getPortalPath(nextSection));
     }
 
+    function openDashboardOrder(orderNumber: string) {
+        setQuery('');
+        setLoadError('');
+        void navigate(
+            `${getPortalPath('orders')}?order=${encodeURIComponent(orderNumber)}`,
+        );
+    }
+
+    function openUrgentOrders() {
+        setQuery('');
+        setLoadError('');
+        void navigate(`${getPortalPath('orders')}?priority=urgent`);
+    }
+
     if (booting) {
         return (
             <main className="grid min-h-screen place-items-center bg-[#f3f6f5]">
@@ -261,12 +293,12 @@ function WelcomePage() {
     if (!user || !token) {
         return (
             <LoginPage
-                email={loginEmail}
+                identifier={loginIdentifier}
                 password={loginPassword}
                 error={loginError}
                 busy={loginBusy}
                 showDemoCredentials={showDemoCredentials}
-                onEmailChange={setLoginEmail}
+                onIdentifierChange={setLoginIdentifier}
                 onPasswordChange={setLoginPassword}
                 onSubmit={handleLogin}
             />
@@ -286,16 +318,20 @@ function WelcomePage() {
             : section === 'patient-promotions'
               ? 'عروض المرضى وكوبوناتهم'
               : section === 'settings'
-                ? 'إعدادات النظام'
-                : isWorkflowSection(section)
-                  ? workflowSectionTitle(section)
-                  : section === 'patients'
-                    ? 'المرضى'
-                    : section === 'tests'
-                      ? 'كتالوج التحاليل'
-                      : section === 'branches'
-                        ? 'الفروع'
-                        : 'نظرة عامة';
+                ? 'الإعدادات'
+                : section === 'payments'
+                  ? 'المدفوعات والتحصيل'
+                  : section === 'shifts'
+                    ? 'الشيفتات والحضور'
+                    : isWorkflowSection(section)
+                      ? workflowSectionTitle(section)
+                      : section === 'patients'
+                        ? 'المرضى'
+                        : section === 'tests'
+                          ? 'كتالوج التحاليل'
+                          : section === 'branches'
+                            ? 'الفروع'
+                            : 'نظرة عامة';
     return (
         <PortalLayout
             section={section}
@@ -306,14 +342,8 @@ function WelcomePage() {
             navigationItems={navItems}
             notifications={orderNotifications}
             realtimeStatus={realtimeStatus}
-            soundNotificationsEnabled={soundNotificationsEnabled}
-            firebasePushAvailable={firebasePushAvailable}
-            firebasePushEnabled={firebasePushEnabled}
-            firebasePushBusy={firebasePushBusy}
             onNavigate={navigateToSection}
             onSignOut={() => void handleLogout()}
-            onToggleSoundNotifications={toggleSoundNotifications}
-            onToggleFirebasePushNotifications={toggleFirebasePushNotifications}
             onMarkNotificationsAsRead={synchronizeReadNotifications}
             onOpenNotification={openOrderNotification}
         >
@@ -325,6 +355,7 @@ function WelcomePage() {
                         user={user}
                         roleLabel={roleLabels[user.role]}
                         initialOrderSearch={initialOrderSearch}
+                        initialOrderPriority={initialOrderPriority}
                         orderRealtimeRevision={orderRealtimeRevision}
                         canManagePatients={canManagePatients}
                         canManageBranches={canManageBranches}
@@ -337,6 +368,21 @@ function WelcomePage() {
                         query={query}
                         onQueryChange={setQuery}
                         onNavigate={navigateToSection}
+                        onViewOrder={openDashboardOrder}
+                        onViewUrgentOrders={openUrgentOrders}
+                        soundNotificationsEnabled={soundNotificationsEnabled}
+                        notificationSound={notificationSound}
+                        firebasePushAvailable={firebasePushAvailable}
+                        firebasePushEnabled={firebasePushEnabled}
+                        firebasePushBusy={firebasePushBusy}
+                        onToggleSoundNotifications={toggleSoundNotifications}
+                        onNotificationSoundChange={changeNotificationSound}
+                        onPreviewNotificationSound={() =>
+                            void previewNotificationSound()
+                        }
+                        onToggleFirebasePushNotifications={
+                            toggleFirebasePushNotifications
+                        }
                         onAdd={openEditor}
                         onEdit={editCatalogRecord}
                         onPageChange={(nextSection, url) =>

@@ -734,6 +734,10 @@ export function WorkflowEditor({
                         required: true,
                         dir: 'ltr',
                     })}
+                    {input('phone', 'رقم الهاتف (اختياري)', {
+                        type: 'tel',
+                        dir: 'ltr',
+                    })}
                     {input(
                         'password',
                         editor.id ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور',

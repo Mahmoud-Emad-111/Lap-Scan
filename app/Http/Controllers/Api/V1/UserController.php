@@ -26,7 +26,27 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request, CreateUserAction $createUser): JsonResponse
     {
-        $user = $createUser->handle($request->validated());
+        /** @var array{
+         *     name: string,
+         *     email: string,
+         *     phone?: string|null,
+         *     password: string,
+         *     role: string,
+         *     branch_ids?: array<array-key, int|string>
+         * } $validated
+         */
+        $validated = $request->validated();
+        $user = $createUser->handle([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
+            'password' => $validated['password'],
+            'role' => $validated['role'],
+            'branch_ids' => array_values(array_map(
+                static fn (int|string $branchId): int => (int) $branchId,
+                $validated['branch_ids'] ?? [],
+            )),
+        ]);
 
         return UserResource::make($user)->response()->setStatusCode(201);
     }

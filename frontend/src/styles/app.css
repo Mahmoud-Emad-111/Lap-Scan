@@ -27,6 +27,24 @@ body {
     text-rendering: optimizeLegibility;
 }
 
+.sidebar-navigation {
+    scrollbar-color: #b6d5ce transparent;
+    scrollbar-width: thin;
+}
+
+.sidebar-navigation::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-navigation::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: #b6d5ce;
+}
+
+.sidebar-navigation::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 .notification-island {
     transform-origin: top center;
     animation: notification-drop 420ms cubic-bezier(0.2, 0.75, 0.25, 1);

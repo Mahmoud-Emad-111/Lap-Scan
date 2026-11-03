@@ -18,9 +18,11 @@ use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
- * @property int $id
+ * @property positive-int $id
+ * @property-read DoctorProfile|null $doctorProfile
  * @property string $name
  * @property string $email
+ * @property string|null $phone
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property UserRole $role
@@ -28,7 +30,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'phone', 'password'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -73,6 +75,18 @@ class User extends Authenticatable
     public function createdOrders(): HasMany
     {
         return $this->hasMany(Order::class, 'created_by');
+    }
+
+    /** @return HasMany<OrderPayment, $this> */
+    public function recordedPayments(): HasMany
+    {
+        return $this->hasMany(OrderPayment::class, 'recorded_by');
+    }
+
+    /** @return HasMany<ShiftSchedule, $this> */
+    public function shiftSchedules(): HasMany
+    {
+        return $this->hasMany(ShiftSchedule::class);
     }
 
     public function isLabAdministrator(): bool

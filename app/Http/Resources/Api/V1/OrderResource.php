@@ -45,6 +45,9 @@ class OrderResource extends JsonResource
             'collection_address' => $this->collection_address,
             'collection_requested_at' => $this->collection_requested_at?->toISOString(),
             'total' => $this->total,
+            'paid_amount' => $this->paidAmount(),
+            'balance_due' => $this->balanceDue(),
+            'payment_status' => $this->paymentStatus(),
             'expected_result_at' => $this->expectedResultAt(),
             'items' => $this->whenLoaded('items', fn () => OrderItemResource::collection($this->items)),
             'created_at' => $this->created_at?->toISOString(),
@@ -75,5 +78,33 @@ class OrderResource extends JsonResource
         }
 
         return $expectedTimes->max()?->toISOString();
+    }
+
+    private function paidAmount(): string
+    {
+        return number_format((float) ($this->payments_sum_amount ?? 0), 2, '.', '');
+    }
+
+    private function balanceDue(): string
+    {
+        $balanceInCents = max(
+            0,
+            (int) round((float) $this->total * 100)
+                - (int) round((float) ($this->payments_sum_amount ?? 0) * 100),
+        );
+
+        return number_format($balanceInCents / 100, 2, '.', '');
+    }
+
+    private function paymentStatus(): string
+    {
+        $totalInCents = (int) round((float) $this->total * 100);
+        $paidInCents = (int) round((float) ($this->payments_sum_amount ?? 0) * 100);
+
+        if ($paidInCents >= $totalInCents) {
+            return 'paid';
+        }
+
+        return $paidInCents > 0 ? 'partial' : 'unpaid';
     }
 }

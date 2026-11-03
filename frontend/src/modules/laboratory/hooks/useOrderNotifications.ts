@@ -19,6 +19,7 @@ import {
     registerFirebasePush,
     unregisterFirebasePush,
 } from '@/modules/notifications/services/firebasePush';
+import type { NotificationSound } from '@/modules/notifications/notification-sounds';
 import type { AuthUser } from '@/modules/auth/types';
 
 type UseOrderNotificationsOptions = {
@@ -27,6 +28,38 @@ type UseOrderNotificationsOptions = {
 };
 
 const SOUND_PREFERENCE_KEY = 'lab-order-sound-enabled';
+const SOUND_STYLE_KEY = 'lab-order-sound-style';
+
+function isNotificationSound(value: string | null): value is NotificationSound {
+    return value === 'single' || value === 'double' || value === 'triple';
+}
+
+function playNotificationSound(
+    audioContext: AudioContext,
+    sound: NotificationSound,
+) {
+    const frequencies: Record<NotificationSound, number[]> = {
+        single: [880],
+        double: [740, 980],
+        triple: [660, 830, 990],
+    };
+    const soundStart = audioContext.currentTime;
+
+    frequencies[sound].forEach((frequency, index) => {
+        const start = soundStart + index * 0.2;
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.06, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.2);
+    });
+}
 
 export function useOrderNotifications({
     token,
@@ -40,9 +73,12 @@ export function useOrderNotifications({
     const [realtimeStatus, setRealtimeStatus] =
         useState<RealtimeConnectionStatus>('disconnected');
     const [soundEnabled, setSoundEnabled] = useState(false);
+    const [notificationSound, setNotificationSound] =
+        useState<NotificationSound>('single');
     const [firebasePushEnabled, setFirebasePushEnabled] = useState(false);
     const [firebasePushBusy, setFirebasePushBusy] = useState(false);
     const soundEnabledRef = useRef(false);
+    const notificationSoundRef = useRef<NotificationSound>('single');
     const seenOrderIdsRef = useRef(new Set<number>());
     const audioContextRef = useRef<AudioContext | null>(null);
     const firebaseMessageUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -54,18 +90,10 @@ export function useOrderNotifications({
             const audioContext = audioContextRef.current;
 
             if (soundEnabledRef.current && audioContext?.state === 'running') {
-                const oscillator = audioContext.createOscillator();
-                const gain = audioContext.createGain();
-                const soundStart = audioContext.currentTime;
-
-                oscillator.type = 'sine';
-                oscillator.frequency.setValueAtTime(880, soundStart);
-                gain.gain.setValueAtTime(0.08, soundStart);
-                gain.gain.exponentialRampToValueAtTime(0.001, soundStart + 0.2);
-                oscillator.connect(gain);
-                gain.connect(audioContext.destination);
-                oscillator.start(soundStart);
-                oscillator.stop(soundStart + 0.9);
+                playNotificationSound(
+                    audioContext,
+                    notificationSoundRef.current,
+                );
             }
 
             showNotice(message);
@@ -253,6 +281,41 @@ export function useOrderNotifications({
             window.removeEventListener('storage', synchronizeSoundPreference);
         };
     }, []);
+
+    useEffect(() => {
+        try {
+            const savedSound = window.localStorage.getItem(SOUND_STYLE_KEY);
+
+            if (isNotificationSound(savedSound)) {
+                notificationSoundRef.current = savedSound;
+                setNotificationSound(savedSound);
+            }
+        } catch (storageError) {
+            console.error(
+                'Unable to read the notification sound preference.',
+                storageError,
+            );
+            showNotice('تعذّر تحميل نغمة التنبيه المحفوظة.', 'error');
+        }
+
+        function synchronizeNotificationSound(event: StorageEvent) {
+            if (event.key !== SOUND_STYLE_KEY) {
+                return;
+            }
+
+            const sound = isNotificationSound(event.newValue)
+                ? event.newValue
+                : 'single';
+            notificationSoundRef.current = sound;
+            setNotificationSound(sound);
+        }
+
+        window.addEventListener('storage', synchronizeNotificationSound);
+
+        return () => {
+            window.removeEventListener('storage', synchronizeNotificationSound);
+        };
+    }, [showNotice]);
 
     useEffect(() => {
         if (
@@ -553,16 +616,56 @@ export function useOrderNotifications({
         }
     }, [showNotice, showSuccessNotice]);
 
+    const changeNotificationSound = useCallback(
+        (sound: NotificationSound) => {
+            try {
+                window.localStorage.setItem(SOUND_STYLE_KEY, sound);
+                notificationSoundRef.current = sound;
+                setNotificationSound(sound);
+            } catch (storageError) {
+                console.error(
+                    'Unable to save the notification sound preference.',
+                    storageError,
+                );
+                showNotice('تعذّر حفظ نغمة التنبيه على هذا المتصفح.', 'error');
+            }
+        },
+        [showNotice],
+    );
+
+    const previewNotificationSound = useCallback(async () => {
+        try {
+            audioContextRef.current ??= new window.AudioContext();
+            await audioContextRef.current.resume();
+            playNotificationSound(
+                audioContextRef.current,
+                notificationSoundRef.current,
+            );
+        } catch (audioError) {
+            console.error(
+                'Unable to preview the notification sound.',
+                audioError,
+            );
+            showNotice(
+                'تعذّر تشغيل معاينة الصوت. تحقق من إعدادات المتصفح.',
+                'error',
+            );
+        }
+    }, [showNotice]);
+
     return {
         notifications,
         realtimeRevision,
         realtimeStatus,
         soundEnabled,
+        notificationSound,
         firebasePushEnabled,
         firebasePushBusy,
         firebasePushAvailable: isFirebasePushConfigured(),
         markNotificationsAsRead,
         toggleSoundNotifications,
+        changeNotificationSound,
+        previewNotificationSound,
         toggleFirebasePushNotifications,
     };
 }

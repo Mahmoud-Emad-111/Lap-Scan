@@ -10,6 +10,19 @@ use Illuminate\Validation\Rule;
 
 class StoreUserRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $phone = $this->input('phone');
+
+        if (is_string($phone)) {
+            $normalizedPhone = preg_replace('/[\s().-]+/', '', trim($phone));
+
+            $this->merge([
+                'phone' => $normalizedPhone === '' ? null : $normalizedPhone,
+            ]);
+        }
+    }
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -28,6 +41,13 @@ class StoreUserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => [
+                'nullable',
+                'string',
+                'max:30',
+                'regex:/^\+?[0-9]{7,20}$/',
+                'unique:users,phone',
+            ],
             'password' => ['required', 'string', 'min:8'],
             'role' => ['required', Rule::enum(UserRole::class)],
             'branch_ids' => ['required_if:role,lab_staff', 'prohibited_unless:role,lab_staff', 'array'],

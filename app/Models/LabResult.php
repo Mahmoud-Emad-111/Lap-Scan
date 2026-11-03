@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $document_name
  * @property int|null $document_size
  * @property Carbon $entered_at
+ * @property positive-int $entered_by
  * @property Carbon|null $approved_at
  * @property int $version
  */

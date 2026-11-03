@@ -2,23 +2,23 @@ import type { FormEvent } from 'react';
 import { Icon } from '@/components/ui/icon';
 
 type LoginPageProps = {
-    email: string;
+    identifier: string;
     password: string;
     error: string;
     busy: boolean;
     showDemoCredentials: boolean;
-    onEmailChange: (email: string) => void;
+    onIdentifierChange: (identifier: string) => void;
     onPasswordChange: (password: string) => void;
     onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
 export function LoginPage({
-    email,
+    identifier,
     password,
     error,
     busy,
     showDemoCredentials,
-    onEmailChange,
+    onIdentifierChange,
     onPasswordChange,
     onSubmit,
 }: LoginPageProps) {
@@ -77,14 +77,14 @@ export function LoginPage({
                         </div>
                     )}
                     <label className="grid gap-2 text-sm font-medium text-slate-700">
-                        البريد الإلكتروني
+                        البريد الإلكتروني أو رقم الهاتف
                         <input
-                            type="email"
+                            type="text"
                             autoComplete="username"
-                            placeholder="name@example.com"
-                            value={email}
+                            placeholder="name@example.com أو 01xxxxxxxxx"
+                            value={identifier}
                             onChange={(event) =>
-                                onEmailChange(event.target.value)
+                                onIdentifierChange(event.target.value)
                             }
                             required
                             dir="ltr"

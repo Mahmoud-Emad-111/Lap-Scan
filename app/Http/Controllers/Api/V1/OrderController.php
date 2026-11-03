@@ -23,18 +23,39 @@ class OrderController extends Controller
     {
         Gate::authorize('viewAny', Order::class);
 
+        /** @var array{
+         *     search?: string|null,
+         *     status?: string|null,
+         *     source?: string|null,
+         *     priority?: 'normal'|'urgent'|null,
+         *     branch_id?: int|string|null,
+         *     payment_status?: 'outstanding'|'unpaid'|'partial'|'paid'|null,
+         *     from?: string|null,
+         *     to?: string|null
+         * } $filters
+         */
         $filters = $request->validate([
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'nullable', Rule::enum(OrderStatus::class)],
             'source' => ['sometimes', 'nullable', Rule::enum(OrderSource::class)],
             'priority' => ['sometimes', 'nullable', Rule::in(['normal', 'urgent'])],
             'branch_id' => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
+            'payment_status' => ['sometimes', 'nullable', Rule::in(['outstanding', 'unpaid', 'partial', 'paid'])],
             'from' => ['sometimes', 'nullable', 'date'],
             'to' => ['sometimes', 'nullable', 'date', 'after_or_equal:from'],
         ]);
-        $displayedOrderId = Order::idFromDisplayNumber(trim($filters['search'] ?? ''));
+        $search = $filters['search'] ?? null;
+        $status = $filters['status'] ?? null;
+        $source = $filters['source'] ?? null;
+        $priority = $filters['priority'] ?? null;
+        $branchId = $filters['branch_id'] ?? null;
+        $paymentStatus = $filters['payment_status'] ?? null;
+        $from = $filters['from'] ?? null;
+        $to = $filters['to'] ?? null;
+        $displayedOrderId = Order::idFromDisplayNumber(trim($search ?? ''));
 
         $orders = Order::query()
+            ->withSum('payments', 'amount')
             ->with(['branch', 'patient', 'referringDoctor', 'items.sample', 'items.result', 'items.test'])
             ->when(
                 ! $request->user()->isLabAdministrator(),
@@ -43,16 +64,15 @@ class OrderController extends Controller
                     fn ($users) => $users->whereKey($request->user()->id),
                 ),
             )
-            ->when(isset($filters['priority']), fn ($query) => $query->where('priority', $filters['priority']))
-            ->when(isset($filters['status']), fn ($query) => $query->where('status', $filters['status']))
-            ->when(isset($filters['source']), fn ($query) => $query->where('source', $filters['source']))
-            ->when(isset($filters['branch_id']), fn ($query) => $query->where('branch_id', $filters['branch_id']))
-            ->when(isset($filters['from']), fn ($query) => $query->whereDate('created_at', '>=', $filters['from']))
-            ->when(isset($filters['to']), fn ($query) => $query->whereDate('created_at', '<=', $filters['to']))
+            ->when($priority !== null, fn ($query) => $query->where('priority', $priority))
+            ->when($status !== null, fn ($query) => $query->where('status', $status))
+            ->when($source !== null, fn ($query) => $query->where('source', $source))
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($from !== null, fn ($query) => $query->whereDate('created_at', '>=', $from))
+            ->when($to !== null, fn ($query) => $query->whereDate('created_at', '<=', $to))
             ->when(
-                isset($filters['search']) && $filters['search'] !== '',
-                fn ($query) => $query->where(function ($orders) use ($filters, $displayedOrderId): void {
-                    $search = $filters['search'];
+                $search !== null && $search !== '',
+                fn ($query) => $query->where(function ($orders) use ($search, $displayedOrderId): void {
                     $orders
                         ->where('order_number', 'like', '%'.$search.'%')
                         ->when($displayedOrderId !== null, fn ($orders) => $orders->orWhereKey($displayedOrderId))
@@ -62,9 +82,24 @@ class OrderController extends Controller
                 }),
             )
             ->latest('created_at')
-            ->latest('id')
-            ->paginate(25)
-            ->withQueryString();
+            ->latest('id');
+
+        if ($paymentStatus !== null) {
+            $paidAmountQuery = '(SELECT COALESCE(SUM(order_payments.amount), 0) FROM order_payments WHERE order_payments.order_id = orders.id)';
+
+            match ($paymentStatus) {
+                'outstanding' => $orders
+                    ->where('status', '!=', OrderStatus::Cancelled->value)
+                    ->whereRaw($paidAmountQuery.' < orders.total'),
+                'unpaid' => $orders->whereRaw($paidAmountQuery.' = 0'),
+                'partial' => $orders
+                    ->whereRaw($paidAmountQuery.' > 0')
+                    ->whereRaw($paidAmountQuery.' < orders.total'),
+                'paid' => $orders->whereRaw($paidAmountQuery.' >= orders.total'),
+            };
+        }
+
+        $orders = $orders->paginate(25)->withQueryString();
 
         return OrderResource::collection($orders);
     }
@@ -89,7 +124,7 @@ class OrderController extends Controller
     {
         Gate::authorize('view', $order);
 
-        return OrderResource::make($order->load([
+        return OrderResource::make($order->loadSum('payments', 'amount')->load([
             'branch',
             'patient',
             'referringDoctor',

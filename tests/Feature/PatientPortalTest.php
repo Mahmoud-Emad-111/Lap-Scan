@@ -1,16 +1,41 @@
 <?php
 
 use App\Enums\LabResultStatus;
+use App\Enums\PaymentMethod;
 use App\Enums\UserRole;
 use App\Models\Branch;
 use App\Models\LabResult;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrderPayment;
 use App\Models\Patient;
 use App\Models\Test as LabTest;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+
+it('returns current payment balances in the patient order list', function () {
+    $patientUser = User::factory()->create();
+    $patientUser->forceFill(['role' => UserRole::Patient])->save();
+    $patient = Patient::factory()->for($patientUser)->create();
+    $branch = Branch::factory()->create();
+    $order = Order::factory()->for($patient)->for($branch)->create([
+        'total' => '100.00',
+    ]);
+    $recorder = User::factory()->create();
+    OrderPayment::factory()->for($order)->for($branch)->create([
+        'recorded_by' => $recorder->id,
+        'amount' => '35.00',
+        'method' => PaymentMethod::Cash,
+    ]);
+    Sanctum::actingAs($patientUser);
+
+    $this->getJson('/api/v1/patient/orders')
+        ->assertOk()
+        ->assertJsonPath('data.0.paid_amount', '35.00')
+        ->assertJsonPath('data.0.balance_due', '65.00')
+        ->assertJsonPath('data.0.payment_status', 'partial');
+});
 
 it('does not expose another patient result through the patient portal', function () {
     $patientUser = User::factory()->create();

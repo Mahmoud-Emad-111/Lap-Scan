@@ -50,6 +50,7 @@ export function WorkflowSectionPage({
     currentUserId,
     orderRealtimeRevision,
     initialOrderSearch,
+    initialOrderPriority,
 }: {
     section: WorkflowSection;
     token: string;
@@ -57,6 +58,7 @@ export function WorkflowSectionPage({
     currentUserId: number;
     orderRealtimeRevision: number;
     initialOrderSearch?: string;
+    initialOrderPriority?: string;
 }) {
     const { showSuccessNotice } = useNotifications();
     const [page, setPage] = useState<ApiPage<WorkflowRow> | null>(null);
@@ -65,7 +67,9 @@ export function WorkflowSectionPage({
     const [patients, setPatients] = useState<PatientOption[]>([]);
     const [tests, setTests] = useState<TestOption[]>([]);
     const [query, setQuery] = useState(initialOrderSearch ?? '');
-    const [priorityFilter, setPriorityFilter] = useState('');
+    const [priorityFilter, setPriorityFilter] = useState(
+        initialOrderPriority ?? '',
+    );
     const [orderStatusFilter, setOrderStatusFilter] = useState('');
     const [branchFilter, setBranchFilter] = useState('');
     const [dateFromFilter, setDateFromFilter] = useState('');
@@ -168,8 +172,8 @@ export function WorkflowSectionPage({
     useEffect(() => {
         setQuery(initialOrderSearch ?? '');
 
-        if (isOrderSection && initialOrderSearch) {
-            setPriorityFilter('');
+        if (isOrderSection && (initialOrderSearch || initialOrderPriority)) {
+            setPriorityFilter(initialOrderPriority ?? '');
             setOrderStatusFilter('');
             setBranchFilter('');
             setDateFromFilter('');
@@ -177,14 +181,27 @@ export function WorkflowSectionPage({
         }
 
         void loadPage(
-            isOrderSection && initialOrderSearch
+            isOrderSection && (initialOrderSearch || initialOrderPriority)
                 ? getWorkflowOrdersUrl(
-                      { search: initialOrderSearch },
+                      {
+                          ...(initialOrderSearch
+                              ? { search: initialOrderSearch }
+                              : {}),
+                          ...(initialOrderPriority
+                              ? { priority: initialOrderPriority }
+                              : {}),
+                      },
                       homeCollectionSource,
                   )
                 : undefined,
         );
-    }, [homeCollectionSource, initialOrderSearch, isOrderSection, loadPage]);
+    }, [
+        homeCollectionSource,
+        initialOrderPriority,
+        initialOrderSearch,
+        isOrderSection,
+        loadPage,
+    ]);
 
     useEffect(() => {
         if (
@@ -270,6 +287,7 @@ export function WorkflowSectionPage({
                 values: {
                     name: user?.name ?? '',
                     email: user?.email ?? '',
+                    phone: user?.phone ?? '',
                     password: '',
                     role: user?.role ?? 'lab_staff',
                     branch_ids:
@@ -437,6 +455,7 @@ export function WorkflowSectionPage({
                 const payload = {
                     name: getValue(values.name),
                     email: getValue(values.email),
+                    phone: getValue(values.phone) || null,
                     role,
                     ...(getValue(values.password)
                         ? { password: getValue(values.password) }

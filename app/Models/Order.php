@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * @property OrderStatus $status
@@ -21,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $patient_promotion_id
  * @property array{rule_id: int, name: string, discount_type: string, discount_value: string, minimum_subtotal: string|null, maximum_discount: string|null, referral_scope: string, discount_amount: string, applied_at: string}|null $discount_snapshot
  * @property string $total
+ * @property Carbon|null $collection_requested_at
  */
 class Order extends Model
 {
@@ -103,6 +105,12 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /** @return HasMany<OrderPayment, $this> */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(OrderPayment::class);
     }
 
     protected function casts(): array

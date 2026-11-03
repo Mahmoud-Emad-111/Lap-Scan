@@ -7,6 +7,10 @@ import DashboardController from './DashboardController'
 import AppSettingController from './AppSettingController'
 import UserController from './UserController'
 import OrderController from './OrderController'
+import OrderPaymentController from './OrderPaymentController'
+import FinanceReportController from './FinanceReportController'
+import ShiftScheduleController from './ShiftScheduleController'
+import ShiftAttendanceController from './ShiftAttendanceController'
 import ReferralDiscountRuleController from './ReferralDiscountRuleController'
 import PatientPromotionController from './PatientPromotionController'
 import DoctorController from './DoctorController'
@@ -29,6 +33,10 @@ const V1 = {
     AppSettingController: Object.assign(AppSettingController, AppSettingController),
     UserController: Object.assign(UserController, UserController),
     OrderController: Object.assign(OrderController, OrderController),
+    OrderPaymentController: Object.assign(OrderPaymentController, OrderPaymentController),
+    FinanceReportController: Object.assign(FinanceReportController, FinanceReportController),
+    ShiftScheduleController: Object.assign(ShiftScheduleController, ShiftScheduleController),
+    ShiftAttendanceController: Object.assign(ShiftAttendanceController, ShiftAttendanceController),
     ReferralDiscountRuleController: Object.assign(ReferralDiscountRuleController, ReferralDiscountRuleController),
     PatientPromotionController: Object.assign(PatientPromotionController, PatientPromotionController),
     DoctorController: Object.assign(DoctorController, DoctorController),

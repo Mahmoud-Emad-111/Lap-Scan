@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property DoctorVerificationStatus $verification_status
+ * @property Carbon|null $reviewed_at
  * @property Carbon|null $verified_at
  */
 class DoctorProfile extends Model

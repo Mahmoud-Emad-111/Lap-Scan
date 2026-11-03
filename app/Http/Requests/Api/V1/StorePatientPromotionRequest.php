@@ -5,7 +5,6 @@ namespace App\Http\Requests\Api\V1;
 use App\Enums\PatientPromotionKind;
 use App\Models\PatientPromotion;
 use App\Models\User;
-use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -20,14 +19,14 @@ class StorePatientPromotionRequest extends FormRequest
         return $this->user()?->can('managePatientPromotions', User::class) ?? false;
     }
 
-    /** @return array<string, array<int, ValidationRule|string>> */
+    /** @return array<string, array<int, mixed>> */
     public function rules(): array
     {
         $kind = $this->input('kind');
         $promotion = $this->route('patientPromotion') ?? $this->route('patient_promotion');
         $codeRule = Rule::unique('patient_promotions', 'code');
 
-        if ($promotion instanceof PatientPromotion || is_int($promotion) || is_string($promotion)) {
+        if ($promotion instanceof PatientPromotion || is_string($promotion)) {
             $codeRule->ignore($promotion);
         }
 
@@ -97,6 +96,69 @@ class StorePatientPromotionRequest extends FormRequest
                 Rule::exists('tests', 'id')->where('is_active', true),
             ],
             'is_active' => ['required', 'boolean'],
+        ];
+    }
+
+    /**
+     * @return array{
+     *     kind: string,
+     *     name: string,
+     *     description: string|null,
+     *     code: string|null,
+     *     discount_type: string,
+     *     discount_value: numeric-string|int|float,
+     *     minimum_subtotal: numeric-string|int|float|null,
+     *     maximum_discount: numeric-string|int|float|null,
+     *     valid_from: string|null,
+     *     valid_until: string|null,
+     *     validity_days: int|null,
+     *     usage_limit: int|null,
+     *     per_patient_limit: int|null,
+     *     test_ids: list<int>,
+     *     is_active: bool
+     * }
+     */
+    public function promotionAttributes(): array
+    {
+        /** @var array{
+         *     kind: string,
+         *     name: string,
+         *     description?: string|null,
+         *     code?: string|null,
+         *     discount_type: string,
+         *     discount_value: numeric-string|int|float,
+         *     minimum_subtotal?: numeric-string|int|float|null,
+         *     maximum_discount?: numeric-string|int|float|null,
+         *     valid_from?: string|null,
+         *     valid_until?: string|null,
+         *     validity_days?: int|string|null,
+         *     usage_limit?: int|string|null,
+         *     per_patient_limit?: int|string|null,
+         *     test_ids?: array<array-key, int|string>,
+         *     is_active: bool|int|string
+         * } $validated
+         */
+        $validated = $this->validated();
+
+        return [
+            'kind' => $validated['kind'],
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'code' => $validated['code'] ?? null,
+            'discount_type' => $validated['discount_type'],
+            'discount_value' => $validated['discount_value'],
+            'minimum_subtotal' => $validated['minimum_subtotal'] ?? null,
+            'maximum_discount' => $validated['maximum_discount'] ?? null,
+            'valid_from' => $validated['valid_from'] ?? null,
+            'valid_until' => $validated['valid_until'] ?? null,
+            'validity_days' => isset($validated['validity_days']) ? (int) $validated['validity_days'] : null,
+            'usage_limit' => isset($validated['usage_limit']) ? (int) $validated['usage_limit'] : null,
+            'per_patient_limit' => isset($validated['per_patient_limit']) ? (int) $validated['per_patient_limit'] : null,
+            'test_ids' => array_values(array_map(
+                static fn (int|string $testId): int => (int) $testId,
+                $validated['test_ids'] ?? [],
+            )),
+            'is_active' => $this->boolean('is_active'),
         ];
     }
 

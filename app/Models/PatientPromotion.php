@@ -8,7 +8,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property PatientPromotionKind $kind
+ * @property ReferralDiscountType $discount_type
+ * @property Carbon|null $valid_from
+ * @property Carbon|null $valid_until
+ */
 class PatientPromotion extends Model
 {
     protected $fillable = [
